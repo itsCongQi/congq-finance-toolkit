@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.w8tz5</div>
+    <div class="sidebar-footer">v.m4qr9</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4771,19 +4771,29 @@ const FEED_TTL = 60 * 60 * 1000; // 1 hour
 ═══════════════════════════════ */
 const LIVE_ACTION_LS = 'live-action-v1';
 const LIVE_ACTION_TTL = 15 * 60 * 1000; // 15 min cache
+const LIVE_ACTION_SLOW_TTL = 24 * 60 * 60 * 1000; // 24h for slow (infrequently-changing) sources
 
 async function liveActionLoad() {
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(LIVE_ACTION_LS) || 'null'); } catch(e) {}
   if (cached) {
+    window._laData = cached; // preserve slow data across fast refreshes
     liveActionRender(cached); // show stale data immediately
     if (Date.now() - cached.ts >= LIVE_ACTION_TTL) liveActionFetch(true, true); // background refresh if stale
+    // Background-refresh any slow source whose data is older than SLOW_TTL
+    const now = Date.now();
+    for (const [key, src] of Object.entries(LA_SOURCES)) {
+      if (!src.slow) continue;
+      const ts = cached[src.tsKey];
+      if (!ts || now - ts > LIVE_ACTION_SLOW_TTL) liveActionRefreshSlow(key, true);
+    }
   } else {
-    liveActionFetch(false, false);
+    // First visit: fetch everything including slow sources
+    liveActionFetch(false, false, true);
   }
 }
 
-async function liveActionFetch(force, background) {
+async function liveActionFetch(force, background, includeSlow) {
   const btn = document.getElementById('live-action-refresh-btn');
   const content = document.getElementById('live-action-content');
   if (!content) return;
@@ -4793,6 +4803,7 @@ async function liveActionFetch(force, background) {
     try {
       const cached = JSON.parse(localStorage.getItem(LIVE_ACTION_LS) || 'null');
       if (cached && Date.now() - cached.ts < LIVE_ACTION_TTL) {
+        window._laData = cached;
         liveActionRender(cached);
         if (btn) { btn.disabled=false; btn.style.opacity='1'; }
         return;
@@ -4800,17 +4811,22 @@ async function liveActionFetch(force, background) {
     } catch(e) {}
   }
 
-  const d = window._laData = window._laData || {};
+  // Preserve existing _laData (slow source values survive a fast refresh)
+  if (!window._laData) {
+    try { window._laData = JSON.parse(localStorage.getItem(LIVE_ACTION_LS) || 'null') || {}; } catch(e) { window._laData = {}; }
+  }
+  const d = window._laData;
   d.ts = Date.now();
   if (!background) liveActionRender(d); // show skeleton only on foreground load
 
-  await liveActionRunAll(d);
+  await liveActionRunAll(d, includeSlow);
 
   d.ts = Date.now();
   try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {}
   if (btn) { btn.disabled=false; btn.style.opacity='1'; }
   const tsEl = document.getElementById('live-action-ts');
   if (tsEl) tsEl.textContent = 'Just updated';
+  liveActionRender(d); // re-render so slow tile timestamps are accurate
 }
 
 // Shared helpers (module-level)
@@ -4907,28 +4923,36 @@ const LA_SOURCES = {
       const r = await _laFetchWithTimeout('https://open.er-api.com/v6/latest/USD');
       const j = await r.json();
       d.usdCny = j.rates?.CNY; d.usdEur = j.rates?.EUR;
-      let prev = {};
-      try { prev = JSON.parse(localStorage.getItem('la-forex-prev-v1')||'{}'); } catch(e){}
-      const fmtChg = (cur,prv) => {
-        if (!prv||!cur) return 'Exchange rate';
-        const diff=cur-prv, s=diff>=0?'+':'';
-        return `${s}${diff.toFixed(4)} vs yesterday`;
-      };
-      const todayKey = new Date().toISOString().slice(0,10);
-      if (!prev.date||prev.date!==todayKey) localStorage.setItem('la-forex-prev-v1',JSON.stringify({date:todayKey,CNY:d.usdCny,EUR:d.usdEur}));
-      _laUpdateTile('la-usdcny',d.usdCny?.toFixed(4)||'—',fmtChg(d.usdCny,prev.CNY),!prev.CNY||!d.usdCny?'var(--text)':d.usdCny-prev.CNY>=0?'var(--red)':'var(--green)');
-      _laUpdateTile('la-usdeur',d.usdEur?.toFixed(4)||'—',fmtChg(d.usdEur,prev.EUR),!prev.EUR||!d.usdEur?'var(--text)':d.usdEur-prev.EUR>=0?'var(--red)':'var(--green)');
+      // Fetch 1-month-ago rates from Yahoo Finance for % change
+      try {
+        const cnyJ = await _laProxyFetch('https://query1.finance.yahoo.com/v8/finance/chart/CNY%3DX?interval=1mo&range=2mo');
+        const cnyP = JSON.parse(cnyJ.contents);
+        const cnyCloses = cnyP?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+        d.usdCnyPrev1m = cnyCloses.length >= 1 ? cnyCloses[cnyCloses.length - 1] : null;
+      } catch(e) {}
+      try {
+        // EUR=X gives USD per EUR; usdEur is EUR per USD = 1/(EUR=X price)
+        const eurJ = await _laProxyFetch('https://query1.finance.yahoo.com/v8/finance/chart/EUR%3DX?interval=1mo&range=2mo');
+        const eurP = JSON.parse(eurJ.contents);
+        const eurCloses = eurP?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+        d.usdEurPrev1m = eurCloses.length >= 1 ? 1 / eurCloses[eurCloses.length - 1] : null;
+      } catch(e) {}
+      const fmtChg = (cur,prv) => { if(!prv||!cur) return 'Exchange rate'; const diff=cur-prv,s=diff>=0?'+':''; return `${s}${diff.toFixed(4)} (1mo)`; };
+      const chgColor = (cur,prv) => !prv||!cur?'var(--text)':cur-prv>=0?'var(--red)':'var(--green)';
+      _laUpdateTile('la-usdcny',d.usdCny?.toFixed(4)||'—',fmtChg(d.usdCny,d.usdCnyPrev1m),chgColor(d.usdCny,d.usdCnyPrev1m));
+      _laUpdateTile('la-usdeur',d.usdEur?.toFixed(4)||'—',fmtChg(d.usdEur,d.usdEurPrev1m),chgColor(d.usdEur,d.usdEurPrev1m));
     }
   },
   fedrate: {
     ids: ['la-fedrate'],
+    slow: true, tsKey: 'fedRateTs',
     fetch: async(d) => {
       const fredUrl = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS';
       const j = await _laProxyFetch(fredUrl);
       const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
       let val=null;
       for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
-      d.fedRate = val;
+      d.fedRate = val; d.fedRateTs = Date.now();
       _laUpdateTile('la-fedrate', val!=null?val.toFixed(2)+'%':'—', 'Federal Reserve');
     }
   },
@@ -4956,13 +4980,13 @@ const LA_SOURCES = {
   twii:     { ids:['la-twii'],     fetch:async(d)=>{ const v=await _laFetchYahoo('%5ETWII');    d.twii=v;     _laUpdateTile('la-twii',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
   us10y: {
     ids: ['la-us10y'],
+    slow: true, tsKey: 'us10yTs',
     fetch: async(d) => {
-      let v;
-      v=await _laFetchYahoo('%5ETNX'); // _laFetchYahoo already handles query1/query2 fallback
-      d.us10y=v; _laUpdateTile('la-us10y',v.price.toFixed(3)+'%',_laChgFmt(v.change),_laChgColor(v.change));
+      const v=await _laFetchYahoo('%5ETNX'); // _laFetchYahoo already handles query1/query2 fallback
+      d.us10y=v; d.us10yTs=Date.now(); _laUpdateTile('la-us10y',v.price.toFixed(3)+'%',_laChgFmt(v.change),_laChgColor(v.change));
     }
   },
-  us3m: { ids:['la-us3m'], fetch:async(d)=>{ const v=await _laFetchYahoo('%5EIRX'); d.us3m=v; _laUpdateTile('la-us3m',v.price.toFixed(3)+'%',_laChgFmt(v.change),_laChgColor(v.change)); } },
+  us3m: { ids:['la-us3m'], slow:true, tsKey:'us3mTs', fetch:async(d)=>{ const v=await _laFetchYahoo('%5EIRX'); d.us3m=v; d.us3mTs=Date.now(); _laUpdateTile('la-us3m',v.price.toFixed(3)+'%',_laChgFmt(v.change),_laChgColor(v.change)); } },
   gold:   { ids:['la-gold'],   fetch:async(d)=>{ const v=await _laFetchYahoo('GC%3DF'); d.gold=v;   _laUpdateTile('la-gold','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
   silver: { ids:['la-silver'], fetch:async(d)=>{ const v=await _laFetchYahoo('SI%3DF'); d.silver=v; _laUpdateTile('la-silver','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
   oil:    { ids:['la-oil'],    fetch:async(d)=>{ const v=await _laFetchYahoo('CL%3DF'); d.oil=v;    _laUpdateTile('la-oil',_laPFmt(v.price)+'$/bbl',_laChgFmt(v.change),_laChgColor(v.change)); } },
@@ -4998,13 +5022,15 @@ const LA_SOURCES = {
 const LA_TILE_SOURCE = {};
 for (const [key,src] of Object.entries(LA_SOURCES)) src.ids.forEach(id=>{ LA_TILE_SOURCE[id]=key; });
 
-async function liveActionRunAll(d) {
+async function liveActionRunAll(d, includeSlow) {
   const save = () => { try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {} };
-  const jobs = Object.entries(LA_SOURCES).map(([key,src]) =>
-    src.fetch(d).then(save)
-      .catch(() => src.fetch(d).then(save)) // auto-retry once on failure
-      .catch(() => { src.ids.forEach(id=>_laSetUnavailable(id)); })
-  );
+  const jobs = Object.entries(LA_SOURCES)
+    .filter(([key,src]) => includeSlow || !src.slow)
+    .map(([key,src]) =>
+      src.fetch(d).then(save)
+        .catch(() => src.fetch(d).then(save)) // auto-retry once on failure
+        .catch(() => { src.ids.forEach(id=>_laSetUnavailable(id)); })
+    );
   await Promise.allSettled(jobs);
 }
 
@@ -5024,6 +5050,22 @@ window.liveActionRetry = async function(tileId) {
   }
 };
 
+// Called for manual refresh of a slow source tile, or background check on load
+window.liveActionRefreshSlow = async function(key, background) {
+  const src = LA_SOURCES[key];
+  if (!src || !src.slow) return;
+  if (!background) src.ids.forEach(id=>_laSetLoading(id));
+  const d = window._laData = window._laData || {};
+  try {
+    await src.fetch(d);
+    try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {}
+    liveActionRender(d); // re-render so updated timestamp shows
+  } catch(e) {
+    try { await src.fetch(d); try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e2) {} liveActionRender(d); }
+    catch(e2) { if (!background) src.ids.forEach(id=>_laSetUnavailable(id)); }
+  }
+};
+
 
 function liveActionRender(d) {
   const content = document.getElementById('live-action-content');
@@ -5039,7 +5081,9 @@ function liveActionRender(d) {
   const pFmt    = v => v>=1000?v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):v.toFixed(4);
   const sentColor = s => !s?'var(--text3)':s.includes('Bull')||s.includes('On')?'var(--green)':s.includes('Bear')||s.includes('Off')?'var(--red)':'var(--orange)';
 
-  const tile = (id, label, val, sub, color) => {
+  const fmtAge = ms => { const m=Math.round(ms/60000); if(m<60) return `${m}m ago`; const h=Math.round(m/60); if(h<24) return `${h}h ago`; return `${Math.round(h/24)}d ago`; };
+
+  const _tileBase = (id, label, val, sub, color, extra) => {
     const c = color||'var(--text)';
     const vHtml = val!=null ? `<div class="la-tile-val" style="font-size:15px;font-weight:700;color:${c};letter-spacing:-0.02em;line-height:1.2">${val}</div>`
       : `<div class="la-tile-val" style="font-size:15px;font-weight:700;color:var(--text3)"><span class="feed-skeleton" style="display:inline-block;width:64px;height:13px;border-radius:4px;vertical-align:middle"></span></div>`;
@@ -5047,13 +5091,24 @@ function liveActionRender(d) {
       <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text4);margin-bottom:5px">${label}</div>
       ${vHtml}
       <div class="la-tile-sub" style="font-size:10px;color:var(--text4);margin-top:3px">${sub||'&nbsp;'}</div>
+      ${extra||''}
     </div>`;
+  };
+  const tile = (id, label, val, sub, color) => _tileBase(id, label, val, sub, color, '');
+  const slowTile = (id, label, val, sub, color, tsKey, srcKey) => {
+    const ts = d[tsKey];
+    const ageStr = ts ? fmtAge(Date.now()-ts) : null;
+    const btnLabel = ageStr ? `${ageStr} · <button onclick="event.stopPropagation();liveActionRefreshSlow('${srcKey}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>` : `<button onclick="event.stopPropagation();liveActionRefreshSlow('${srcKey}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Load</button>`;
+    const extra = `<div style="font-size:9px;color:var(--text4);margin-top:3px">${btnLabel}</div>`;
+    return _tileBase(id, label, val, sub, color, extra);
   };
 
   const v = k => d[k];
   const price = k => v(k)?pFmt(v(k).price):null;
   const chg   = k => v(k)?chgFmt(v(k).change):null;
   const cc    = k => v(k)?chgColor(v(k).change):'var(--text3)';
+  const forexChg = (cur,prv) => { if(!prv||!cur) return 'Exchange rate'; const diff=cur-prv,s=diff>=0?'+':''; return `${s}${diff.toFixed(4)} (1mo)`; };
+  const forexColor = (cur,prv) => !prv||!cur?'var(--text)':cur-prv>=0?'var(--red)':'var(--green)';
 
   let fomcStr=null,fomcSub='';
   if (d.nextFomc) {
@@ -5088,9 +5143,9 @@ function liveActionRender(d) {
       tile('la-twii','TAIEX (TW)',price('twii'),chg('twii'),cc('twii'))
     )+
     sec('Bonds & Interest Rates') + row(
-      tile('la-fedrate','Fed Funds Rate',d.fedRate!=null?d.fedRate.toFixed(2)+'%':null,'Federal Reserve')+
-      tile('la-us10y','US 10Y Treasury',v('us10y')?v('us10y').price.toFixed(3)+'%':null,chg('us10y'),cc('us10y'))+
-      tile('la-us3m','US 3M Treasury',v('us3m')?v('us3m').price.toFixed(3)+'%':null,chg('us3m'),cc('us3m'))
+      slowTile('la-fedrate','Fed Funds Rate',d.fedRate!=null?d.fedRate.toFixed(2)+'%':null,'Federal Reserve','var(--text)','fedRateTs','fedrate')+
+      slowTile('la-us10y','US 10Y Treasury',v('us10y')?v('us10y').price.toFixed(3)+'%':null,chg('us10y'),cc('us10y'),'us10yTs','us10y')+
+      slowTile('la-us3m','US 3M Treasury',v('us3m')?v('us3m').price.toFixed(3)+'%':null,chg('us3m'),cc('us3m'),'us3mTs','us3m')
     )+
     sec('Precious Metals') + row(
       tile('la-gold','Gold (XAU)',v('gold')?'$'+pFmt(v('gold').price):null,chg('gold'),cc('gold'))+
@@ -5105,8 +5160,8 @@ function liveActionRender(d) {
     )+
     sec('Macro & Forex') + row(
       tile('la-fomc','Next FOMC',fomcStr,fomcSub,fomcStr==='Today'?'var(--orange)':'var(--text)')+
-      tile('la-usdcny','USD / CNY',d.usdCny?d.usdCny.toFixed(4):null,'Exchange rate')+
-      tile('la-usdeur','USD / EUR',d.usdEur?d.usdEur.toFixed(4):null,'Exchange rate')
+      tile('la-usdcny','USD / CNY',d.usdCny?d.usdCny.toFixed(4):null,forexChg(d.usdCny,d.usdCnyPrev1m),forexColor(d.usdCny,d.usdCnyPrev1m))+
+      tile('la-usdeur','USD / EUR',d.usdEur?d.usdEur.toFixed(4):null,forexChg(d.usdEur,d.usdEurPrev1m),forexColor(d.usdEur,d.usdEurPrev1m))
     );
 }
 
