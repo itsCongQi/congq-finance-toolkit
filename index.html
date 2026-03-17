@@ -4773,18 +4773,21 @@ const LIVE_ACTION_LS = 'live-action-v1';
 const LIVE_ACTION_TTL = 15 * 60 * 1000; // 15 min cache
 
 async function liveActionLoad() {
-  try {
-    const cached = JSON.parse(localStorage.getItem(LIVE_ACTION_LS) || 'null');
-    if (cached && Date.now() - cached.ts < LIVE_ACTION_TTL) { liveActionRender(cached); return; }
-  } catch(e) {}
-  liveActionFetch(false);
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(LIVE_ACTION_LS) || 'null'); } catch(e) {}
+  if (cached) {
+    liveActionRender(cached); // show stale data immediately
+    if (Date.now() - cached.ts >= LIVE_ACTION_TTL) liveActionFetch(true, true); // background refresh if stale
+  } else {
+    liveActionFetch(false, false);
+  }
 }
 
-async function liveActionFetch(force) {
+async function liveActionFetch(force, background) {
   const btn = document.getElementById('live-action-refresh-btn');
   const content = document.getElementById('live-action-content');
   if (!content) return;
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+  if (!background && btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
 
   if (!force) {
     try {
@@ -4799,7 +4802,7 @@ async function liveActionFetch(force) {
 
   const d = window._laData = window._laData || {};
   d.ts = Date.now();
-  liveActionRender(d); // skeleton immediately
+  if (!background) liveActionRender(d); // show skeleton only on foreground load
 
   await liveActionRunAll(d);
 
@@ -4842,7 +4845,7 @@ function _laSetUnavailable(id) {
   if (sEl) sEl.innerHTML = `<span style="color:var(--text4)">Unavailable · </span><button onclick="event.stopPropagation();liveActionRetry('${id}')" style="background:none;border:none;color:var(--blue);font-size:10px;cursor:pointer;padding:0;font-weight:600">↻ Retry</button>`;
 }
 
-async function _laFetchWithTimeout(url, ms=9000) {
+async function _laFetchWithTimeout(url, ms=6000) {
   const ac = new AbortController();
   const t = setTimeout(()=>ac.abort(), ms);
   try {
@@ -4852,11 +4855,30 @@ async function _laFetchWithTimeout(url, ms=9000) {
   } catch(e) { clearTimeout(t); throw e; }
 }
 
+// Fetch through a CORS proxy, falling back to a second proxy if the first fails
+async function _laProxyFetch(targetUrl, ms=6000) {
+  // allorigins wraps response in { contents: "..." }
+  try {
+    const r = await _laFetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, ms);
+    const j = await r.json();
+    if (j && j.contents) return j;
+    throw new Error('empty');
+  } catch(e) {}
+  // Fallback: corsproxy.io returns the raw body
+  const r2 = await _laFetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`, ms);
+  const text = await r2.text();
+  return { contents: text };
+}
+
 async function _laFetchYahoo(sym) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`;
-  const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-  const r = await _laFetchWithTimeout(proxy);
-  const j = await r.json();
+  // Try query1 then query2 as Yahoo alternates availability
+  let j;
+  try {
+    j = await _laProxyFetch(url);
+  } catch(e) {
+    j = await _laProxyFetch(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2d`);
+  }
   const parsed = JSON.parse(j.contents);
   const meta = parsed?.chart?.result?.[0]?.meta;
   if (!meta) throw new Error('no meta');
@@ -4902,8 +4924,7 @@ const LA_SOURCES = {
     ids: ['la-fedrate'],
     fetch: async(d) => {
       const fredUrl = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS';
-      const r = await _laFetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(fredUrl)}`);
-      const j = await r.json();
+      const j = await _laProxyFetch(fredUrl);
       const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
       let val=null;
       for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
@@ -4937,15 +4958,7 @@ const LA_SOURCES = {
     ids: ['la-us10y'],
     fetch: async(d) => {
       let v;
-      try { v=await _laFetchYahoo('%5ETNX'); }
-      catch(e) {
-        const url2=`https://query2.finance.yahoo.com/v8/finance/chart/%5ETNX?interval=1d&range=5d`;
-        const r=await _laFetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(url2)}`);
-        const j=await r.json(); const parsed=JSON.parse(j.contents);
-        const meta=parsed?.chart?.result?.[0]?.meta; if(!meta) throw new Error();
-        const price=meta.regularMarketPrice, prev=meta.chartPreviousClose??meta.previousClose;
-        v={price, change:prev?((price-prev)/prev)*100:null};
-      }
+      v=await _laFetchYahoo('%5ETNX'); // _laFetchYahoo already handles query1/query2 fallback
       d.us10y=v; _laUpdateTile('la-us10y',v.price.toFixed(3)+'%',_laChgFmt(v.change),_laChgColor(v.change));
     }
   },
@@ -4986,8 +4999,11 @@ const LA_TILE_SOURCE = {};
 for (const [key,src] of Object.entries(LA_SOURCES)) src.ids.forEach(id=>{ LA_TILE_SOURCE[id]=key; });
 
 async function liveActionRunAll(d) {
+  const save = () => { try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {} };
   const jobs = Object.entries(LA_SOURCES).map(([key,src]) =>
-    src.fetch(d).catch(()=>{ src.ids.forEach(id=>_laSetUnavailable(id)); })
+    src.fetch(d).then(save)
+      .catch(() => src.fetch(d).then(save)) // auto-retry once on failure
+      .catch(() => { src.ids.forEach(id=>_laSetUnavailable(id)); })
   );
   await Promise.allSettled(jobs);
 }
