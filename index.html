@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.p9ds4</div>
+    <div class="sidebar-footer">v.e6yk8</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -5042,6 +5042,18 @@ const LA_SOURCES = {
 const LA_TILE_SOURCE = {};
 for (const [key,src] of Object.entries(LA_SOURCES)) src.ids.forEach(id=>{ LA_TILE_SOURCE[id]=key; });
 
+// Market trading hours per index tile (tz = IANA timezone, sessions = [[openH,openM,closeH,closeM],...])
+const LA_INDEX_MARKETS = {
+  'la-sp500':    { tz:'America/New_York', sessions:[[9,30,16,0]] },
+  'la-nasdaq':   { tz:'America/New_York', sessions:[[9,30,16,0]] },
+  'la-qqq':      { tz:'America/New_York', sessions:[[9,30,16,0]] },
+  'la-shanghai': { tz:'Asia/Shanghai',    sessions:[[9,30,11,30],[13,0,15,0]] },
+  'la-hsi':      { tz:'Asia/Hong_Kong',   sessions:[[9,30,12,0],[13,0,16,0]] },
+  'la-kospi':    { tz:'Asia/Seoul',       sessions:[[9,0,15,30]] },
+  'la-nikkei':   { tz:'Asia/Tokyo',       sessions:[[9,0,15,30]] },
+  'la-twii':     { tz:'Asia/Taipei',      sessions:[[9,0,13,30]] },
+};
+
 async function liveActionRunAll(d, includeSlow) {
   const save = () => { try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {} };
   const jobs = Object.entries(LA_SOURCES)
@@ -5083,6 +5095,24 @@ window.liveActionRefreshIndexes = async function() {
   d.indexTs = Date.now();
   save();
   liveActionRender(d);
+};
+
+// Called when user clicks ↻ on an individual index tile
+window.liveActionRefreshIndex = async function(tileId) {
+  const key = LA_TILE_SOURCE[tileId];
+  if (!key) return;
+  const src = LA_SOURCES[key];
+  src.ids.forEach(id => _laSetLoading(id));
+  const d = window._laData = window._laData || {};
+  try {
+    await src.fetch(d);
+    d.indexTs = Date.now();
+    try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {}
+    liveActionRender(d);
+  } catch(e) {
+    try { await src.fetch(d); d.indexTs=Date.now(); try{localStorage.setItem(LIVE_ACTION_LS,JSON.stringify(d));}catch(e2){} liveActionRender(d); }
+    catch(e2) { src.ids.forEach(id => _laSetUnavailable(id)); }
+  }
 };
 
 // Called for manual refresh of a slow source tile, or background check on load
@@ -5130,6 +5160,25 @@ function liveActionRender(d) {
     </div>`;
   };
   const tile = (id, label, val, sub, color) => _tileBase(id, label, val, sub, color, '');
+  const marketStatus = (tz, sessions) => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US',{timeZone:tz,weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+      const day=parts.find(p=>p.type==='weekday')?.value;
+      const h=parseInt(parts.find(p=>p.type==='hour')?.value)%24, m=parseInt(parts.find(p=>p.type==='minute')?.value);
+      if(['Sat','Sun'].includes(day)) return 'Closed';
+      const mins=h*60+m;
+      for(const [oh,om,ch,cm] of sessions){if(mins>=oh*60+om&&mins<ch*60+cm)return 'Open';}
+      return 'Closed';
+    } catch(e){return null;}
+  };
+  const indexTile = (id, label, val, sub, color) => {
+    const mkt = LA_INDEX_MARKETS[id];
+    const status = mkt ? marketStatus(mkt.tz, mkt.sessions) : null;
+    const statusHtml = status ? `<span style="font-size:9px;color:${status==='Open'?'var(--green)':'var(--text4)'}">${status==='Open'?'●':'○'} ${status}</span>` : '<span></span>';
+    const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshIndex('${id}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>`;
+    const extra = `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">${statusHtml}${refreshBtn}</div>`;
+    return _tileBase(id, label, val, sub, color, extra);
+  };
   const slowTile = (id, label, val, sub, color, tsKey, srcKey) => {
     const ts = d[tsKey];
     const ageStr = ts ? fmtAge(Date.now()-ts) : null;
@@ -5171,16 +5220,16 @@ function liveActionRender(d) {
       tile('la-feargreed','BTC Fear & Greed',fg?`${fg.value} · ${fg.label}`:null,'Alternative.me index',fgColor)
     )+
     secWithTs('US Equity Indexes',d.indexTs,'liveActionRefreshIndexes') + row(
-      tile('la-sp500','S&P 500',price('sp500'),chg('sp500'),cc('sp500'))+
-      tile('la-nasdaq','NASDAQ',price('nasdaq'),chg('nasdaq'),cc('nasdaq'))+
-      tile('la-qqq','QQQ ETF',price('qqq'),chg('qqq'),cc('qqq'))
+      indexTile('la-sp500','S&P 500',price('sp500'),chg('sp500'),cc('sp500'))+
+      indexTile('la-nasdaq','NASDAQ',price('nasdaq'),chg('nasdaq'),cc('nasdaq'))+
+      indexTile('la-qqq','QQQ ETF',price('qqq'),chg('qqq'),cc('qqq'))
     )+
     secWithTs('Asia-Pacific Indexes',d.indexTs,'liveActionRefreshIndexes') + row(
-      tile('la-shanghai','Shanghai (CN)',price('shanghai'),chg('shanghai'),cc('shanghai'))+
-      tile('la-hsi','Hang Seng (HK)',price('hsi'),chg('hsi'),cc('hsi'))+
-      tile('la-kospi','KOSPI (KR)',price('kospi'),chg('kospi'),cc('kospi'))+
-      tile('la-nikkei','Nikkei 225 (JP)',price('nikkei'),chg('nikkei'),cc('nikkei'))+
-      tile('la-twii','TAIEX (TW)',price('twii'),chg('twii'),cc('twii'))
+      indexTile('la-shanghai','Shanghai (CN)',price('shanghai'),chg('shanghai'),cc('shanghai'))+
+      indexTile('la-hsi','Hang Seng (HK)',price('hsi'),chg('hsi'),cc('hsi'))+
+      indexTile('la-kospi','KOSPI (KR)',price('kospi'),chg('kospi'),cc('kospi'))+
+      indexTile('la-nikkei','Nikkei 225 (JP)',price('nikkei'),chg('nikkei'),cc('nikkei'))+
+      indexTile('la-twii','TAIEX (TW)',price('twii'),chg('twii'),cc('twii'))
     )+
     sec('Bonds & Interest Rates') + row(
       slowTile('la-fedrate','Fed Funds Rate',d.fedRate!=null?d.fedRate.toFixed(2)+'%':null,'Federal Reserve','var(--text)','fedRateTs','fedrate')+
