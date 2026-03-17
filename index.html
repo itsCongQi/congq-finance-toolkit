@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.n3fq7</div>
+    <div class="sidebar-footer">v.t5wc2</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -5020,7 +5020,7 @@ const LA_SOURCES = {
     }
   },
   us3m: { ids:['la-us3m'], slow:true, tsKey:'us3mTs', fetch:async(d)=>{ const v=await _laFetchYahoo('%5EIRX'); d.us3m=v; d.us3mTs=Date.now(); _laUpdateTile('la-us3m',v.price.toFixed(3)+'%',_laChgFmt(v.change),_laChgColor(v.change)); } },
-  gold:   { ids:['la-gold'],   fetch:async(d)=>{ const v=await _laFetchYahoo('GC%3DF'); d.gold=v;   _laUpdateTile('la-gold','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  gold:   { ids:['la-gold'],   fetch:async(d)=>{ const v=await _laFetchYahoo('GC%3DF'); d.gold=v; d.commodityTs=Date.now(); _laUpdateTile('la-gold','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
   silver: { ids:['la-silver'], fetch:async(d)=>{ const v=await _laFetchYahoo('SI%3DF'); d.silver=v; _laUpdateTile('la-silver','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
   oil:    { ids:['la-oil'],    fetch:async(d)=>{ const v=await _laFetchYahoo('CL%3DF'); d.oil=v;    _laUpdateTile('la-oil',_laPFmt(v.price)+'$/bbl',_laChgFmt(v.change),_laChgColor(v.change)); } },
   corn:   { ids:['la-corn'],   fetch:async(d)=>{ const v=await _laFetchYahoo('ZC%3DF'); d.corn=v;   _laUpdateTile('la-corn',_laPFmt(v.price)+'\xa2/bu',_laChgFmt(v.change),_laChgColor(v.change)); } },
@@ -5207,8 +5207,10 @@ function liveActionRender(d) {
     return _tileBase(id, label, val, sub, color, extra);
   };
   const commodityTile = (id, label, val, sub, color) => {
+    const ageStr = d.commodityTs ? fmtAge(Date.now()-d.commodityTs) : null;
+    const tsHtml = ageStr ? `<span style="font-size:9px;color:var(--text4)">${ageStr}</span>` : '<span></span>';
     const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshTile('${id}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>`;
-    const extra = `<div style="display:flex;justify-content:flex-end;margin-top:5px">${refreshBtn}</div>`;
+    const extra = `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">${tsHtml}${refreshBtn}</div>`;
     return _tileBase(id, label, val, sub, color, extra);
   };
   const slowTile = (id, label, val, sub, color, tsKey, srcKey) => {
