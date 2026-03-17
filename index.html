@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.e6yk8</div>
+    <div class="sidebar-footer">v.n3fq7</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4861,6 +4861,18 @@ function _laSetUnavailable(id) {
   if (sEl) sEl.innerHTML = `<span style="color:var(--text4)">Unavailable · </span><button onclick="event.stopPropagation();liveActionRetry('${id}')" style="background:none;border:none;color:var(--blue);font-size:10px;cursor:pointer;padding:0;font-weight:600">↻ Retry</button>`;
 }
 
+function _laIsMarketOpen(tz, sessions) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US',{timeZone:tz,weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+    const day=parts.find(p=>p.type==='weekday')?.value;
+    const h=parseInt(parts.find(p=>p.type==='hour')?.value)%24, m=parseInt(parts.find(p=>p.type==='minute')?.value);
+    if(['Sat','Sun'].includes(day)) return false;
+    const mins=h*60+m;
+    for(const [oh,om,ch,cm] of sessions){if(mins>=oh*60+om&&mins<ch*60+cm)return true;}
+    return false;
+  } catch(e){return true;} // default open on error so data isn't silently skipped
+}
+
 async function _laFetchWithTimeout(url, ms=6000) {
   const ac = new AbortController();
   const t = setTimeout(()=>ac.abort(), ms);
@@ -4978,6 +4990,7 @@ const LA_SOURCES = {
   },
   sp500: {
     ids: ['la-sp500','la-equitysentiment','la-tradsentiment'],
+    marketTile: 'la-sp500',
     fetch: async(d) => {
       const v = await _laFetchYahoo('%5EGSPC');
       d.sp500=v; d.indexTs=Date.now();
@@ -4991,13 +5004,13 @@ const LA_SOURCES = {
       }
     }
   },
-  nasdaq: { ids:['la-nasdaq'], fetch:async(d)=>{ const v=await _laFetchYahoo('%5EIXIC'); d.nasdaq=v; _laUpdateTile('la-nasdaq',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  qqq:    { ids:['la-qqq'],    fetch:async(d)=>{ const v=await _laFetchYahoo('QQQ');    d.qqq=v;    _laUpdateTile('la-qqq',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  shanghai: { ids:['la-shanghai'], fetch:async(d)=>{ const v=await _laFetchYahoo('000001.SS'); d.shanghai=v; _laUpdateTile('la-shanghai',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  hsi:      { ids:['la-hsi'],      fetch:async(d)=>{ const v=await _laFetchYahoo('%5EHSI');     d.hsi=v;      _laUpdateTile('la-hsi',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  kospi:    { ids:['la-kospi'],    fetch:async(d)=>{ const v=await _laFetchYahoo('%5EKS11');    d.kospi=v;    _laUpdateTile('la-kospi',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  nikkei:   { ids:['la-nikkei'],   fetch:async(d)=>{ const v=await _laFetchYahoo('%5EN225');    d.nikkei=v;   _laUpdateTile('la-nikkei',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  twii:     { ids:['la-twii'],     fetch:async(d)=>{ const v=await _laFetchYahoo('%5ETWII');    d.twii=v;     _laUpdateTile('la-twii',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  nasdaq: { ids:['la-nasdaq'], marketTile:'la-nasdaq', fetch:async(d)=>{ const v=await _laFetchYahoo('%5EIXIC'); d.nasdaq=v; _laUpdateTile('la-nasdaq',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  qqq:    { ids:['la-qqq'],    marketTile:'la-qqq',    fetch:async(d)=>{ const v=await _laFetchYahoo('QQQ');    d.qqq=v;    _laUpdateTile('la-qqq',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  shanghai: { ids:['la-shanghai'], marketTile:'la-shanghai', fetch:async(d)=>{ const v=await _laFetchYahoo('000001.SS'); d.shanghai=v; _laUpdateTile('la-shanghai',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  hsi:      { ids:['la-hsi'],      marketTile:'la-hsi',      fetch:async(d)=>{ const v=await _laFetchYahoo('%5EHSI');     d.hsi=v;      _laUpdateTile('la-hsi',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  kospi:    { ids:['la-kospi'],    marketTile:'la-kospi',    fetch:async(d)=>{ const v=await _laFetchYahoo('%5EKS11');    d.kospi=v;    _laUpdateTile('la-kospi',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  nikkei:   { ids:['la-nikkei'],   marketTile:'la-nikkei',   fetch:async(d)=>{ const v=await _laFetchYahoo('%5EN225');    d.nikkei=v;   _laUpdateTile('la-nikkei',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  twii:     { ids:['la-twii'],     marketTile:'la-twii',     fetch:async(d)=>{ const v=await _laFetchYahoo('%5ETWII');    d.twii=v;     _laUpdateTile('la-twii',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
   us10y: {
     ids: ['la-us10y'],
     slow: true, tsKey: 'us10yTs',
@@ -5057,7 +5070,15 @@ const LA_INDEX_MARKETS = {
 async function liveActionRunAll(d, includeSlow) {
   const save = () => { try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {} };
   const jobs = Object.entries(LA_SOURCES)
-    .filter(([key,src]) => includeSlow || !src.slow)
+    .filter(([key,src]) => {
+      if (src.slow) return !!includeSlow;
+      // On normal refresh, skip index sources whose market is currently closed
+      if (!includeSlow && src.marketTile) {
+        const mkt = LA_INDEX_MARKETS[src.marketTile];
+        if (mkt && !_laIsMarketOpen(mkt.tz, mkt.sessions)) return false;
+      }
+      return true;
+    })
     .map(([key,src]) =>
       src.fetch(d).then(save)
         .catch(() => src.fetch(d).then(save)) // auto-retry once on failure
@@ -5095,6 +5116,23 @@ window.liveActionRefreshIndexes = async function() {
   d.indexTs = Date.now();
   save();
   liveActionRender(d);
+};
+
+// Generic per-tile refresh (commodities, metals, etc.)
+window.liveActionRefreshTile = async function(tileId) {
+  const key = LA_TILE_SOURCE[tileId];
+  if (!key) return;
+  const src = LA_SOURCES[key];
+  src.ids.forEach(id => _laSetLoading(id));
+  const d = window._laData = window._laData || {};
+  try {
+    await src.fetch(d);
+    try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {}
+    liveActionRender(d);
+  } catch(e) {
+    try { await src.fetch(d); try{localStorage.setItem(LIVE_ACTION_LS,JSON.stringify(d));}catch(e2){} liveActionRender(d); }
+    catch(e2) { src.ids.forEach(id => _laSetUnavailable(id)); }
+  }
 };
 
 // Called when user clicks ↻ on an individual index tile
@@ -5160,23 +5198,17 @@ function liveActionRender(d) {
     </div>`;
   };
   const tile = (id, label, val, sub, color) => _tileBase(id, label, val, sub, color, '');
-  const marketStatus = (tz, sessions) => {
-    try {
-      const parts = new Intl.DateTimeFormat('en-US',{timeZone:tz,weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
-      const day=parts.find(p=>p.type==='weekday')?.value;
-      const h=parseInt(parts.find(p=>p.type==='hour')?.value)%24, m=parseInt(parts.find(p=>p.type==='minute')?.value);
-      if(['Sat','Sun'].includes(day)) return 'Closed';
-      const mins=h*60+m;
-      for(const [oh,om,ch,cm] of sessions){if(mins>=oh*60+om&&mins<ch*60+cm)return 'Open';}
-      return 'Closed';
-    } catch(e){return null;}
-  };
   const indexTile = (id, label, val, sub, color) => {
     const mkt = LA_INDEX_MARKETS[id];
-    const status = mkt ? marketStatus(mkt.tz, mkt.sessions) : null;
-    const statusHtml = status ? `<span style="font-size:9px;color:${status==='Open'?'var(--green)':'var(--text4)'}">${status==='Open'?'●':'○'} ${status}</span>` : '<span></span>';
+    const open = mkt ? _laIsMarketOpen(mkt.tz, mkt.sessions) : null;
+    const statusHtml = mkt ? `<span style="font-size:9px;color:${open?'var(--green)':'var(--text4)'}">${open?'●':'○'} ${open?'Open':'Closed'}</span>` : '<span></span>';
     const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshIndex('${id}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>`;
     const extra = `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">${statusHtml}${refreshBtn}</div>`;
+    return _tileBase(id, label, val, sub, color, extra);
+  };
+  const commodityTile = (id, label, val, sub, color) => {
+    const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshTile('${id}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>`;
+    const extra = `<div style="display:flex;justify-content:flex-end;margin-top:5px">${refreshBtn}</div>`;
     return _tileBase(id, label, val, sub, color, extra);
   };
   const slowTile = (id, label, val, sub, color, tsKey, srcKey) => {
@@ -5238,15 +5270,15 @@ function liveActionRender(d) {
       slowTile('la-us3m','US 3M Treasury',v('us3m')?v('us3m').price.toFixed(3)+'%':null,chg('us3m'),cc('us3m'),'us3mTs','us3m')
     )+
     sec('Precious Metals') + row(
-      tile('la-gold','Gold (XAU)',v('gold')?'$'+pFmt(v('gold').price):null,chg('gold'),cc('gold'))+
-      tile('la-silver','Silver (XAG)',v('silver')?'$'+pFmt(v('silver').price):null,chg('silver'),cc('silver'))
+      commodityTile('la-gold','Gold (XAU)',v('gold')?'$'+pFmt(v('gold').price):null,chg('gold'),cc('gold'))+
+      commodityTile('la-silver','Silver (XAG)',v('silver')?'$'+pFmt(v('silver').price):null,chg('silver'),cc('silver'))
     )+
     sec('Commodities') + row(
-      tile('la-oil','Crude Oil (WTI)',v('oil')?'$'+pFmt(v('oil').price):null,chg('oil'),cc('oil'))+
-      tile('la-natgas','Natural Gas',v('natgas')?'$'+pFmt(v('natgas').price):null,chg('natgas'),cc('natgas'))+
-      tile('la-corn','Corn',v('corn')?pFmt(v('corn').price)+'¢/bu':null,chg('corn'),cc('corn'))+
-      tile('la-wheat','Wheat',v('wheat')?pFmt(v('wheat').price)+'¢/bu':null,chg('wheat'),cc('wheat'))+
-      tile('la-soy','Soybeans',v('soy')?pFmt(v('soy').price)+'¢/bu':null,chg('soy'),cc('soy'))
+      commodityTile('la-oil','Crude Oil (WTI)',v('oil')?'$'+pFmt(v('oil').price):null,chg('oil'),cc('oil'))+
+      commodityTile('la-natgas','Natural Gas',v('natgas')?'$'+pFmt(v('natgas').price):null,chg('natgas'),cc('natgas'))+
+      commodityTile('la-corn','Corn',v('corn')?pFmt(v('corn').price)+'¢/bu':null,chg('corn'),cc('corn'))+
+      commodityTile('la-wheat','Wheat',v('wheat')?pFmt(v('wheat').price)+'¢/bu':null,chg('wheat'),cc('wheat'))+
+      commodityTile('la-soy','Soybeans',v('soy')?pFmt(v('soy').price)+'¢/bu':null,chg('soy'),cc('soy'))
     )+
     sec('Macro & Forex') + row(
       tile('la-fomc','Next FOMC',fomcStr,fomcSub,fomcStr==='Today'?'var(--orange)':'var(--text)')+
