@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.t5wc2</div>
+    <div class="sidebar-footer">v.g1mx5</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -5020,14 +5020,15 @@ const LA_SOURCES = {
     }
   },
   us3m: { ids:['la-us3m'], slow:true, tsKey:'us3mTs', fetch:async(d)=>{ const v=await _laFetchYahoo('%5EIRX'); d.us3m=v; d.us3mTs=Date.now(); _laUpdateTile('la-us3m',v.price.toFixed(3)+'%',_laChgFmt(v.change),_laChgColor(v.change)); } },
-  gold:   { ids:['la-gold'],   fetch:async(d)=>{ const v=await _laFetchYahoo('GC%3DF'); d.gold=v; d.commodityTs=Date.now(); _laUpdateTile('la-gold','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  silver: { ids:['la-silver'], fetch:async(d)=>{ const v=await _laFetchYahoo('SI%3DF'); d.silver=v; _laUpdateTile('la-silver','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
-  oil:    { ids:['la-oil'],    fetch:async(d)=>{ const v=await _laFetchYahoo('CL%3DF'); d.oil=v;    _laUpdateTile('la-oil',_laPFmt(v.price)+'$/bbl',_laChgFmt(v.change),_laChgColor(v.change)); } },
-  corn:   { ids:['la-corn'],   fetch:async(d)=>{ const v=await _laFetchYahoo('ZC%3DF'); d.corn=v;   _laUpdateTile('la-corn',_laPFmt(v.price)+'\xa2/bu',_laChgFmt(v.change),_laChgColor(v.change)); } },
-  wheat:  { ids:['la-wheat'],  fetch:async(d)=>{ const v=await _laFetchYahoo('ZW%3DF'); d.wheat=v;  _laUpdateTile('la-wheat',_laPFmt(v.price)+'\xa2/bu',_laChgFmt(v.change),_laChgColor(v.change)); } },
-  soy:    { ids:['la-soy'],    fetch:async(d)=>{ const v=await _laFetchYahoo('ZS%3DF'); d.soy=v;    _laUpdateTile('la-soy',_laPFmt(v.price)+'\xa2/bu',_laChgFmt(v.change),_laChgColor(v.change)); } },
+  gold:   { ids:['la-gold'],   commodity:true, fetch:async(d)=>{ const v=await _laFetchYahoo('GC%3DF'); d.gold=v; d.commodityTs=Date.now(); _laUpdateTile('la-gold','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  silver: { ids:['la-silver'], commodity:true, fetch:async(d)=>{ const v=await _laFetchYahoo('SI%3DF'); d.silver=v; _laUpdateTile('la-silver','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); } },
+  oil:    { ids:['la-oil'],    commodity:true, fetch:async(d)=>{ const v=await _laFetchYahoo('CL%3DF'); d.oil=v;    _laUpdateTile('la-oil',_laPFmt(v.price)+'$/bbl',_laChgFmt(v.change),_laChgColor(v.change)); } },
+  corn:   { ids:['la-corn'],   commodity:true, fetch:async(d)=>{ const v=await _laFetchYahoo('ZC%3DF'); d.corn=v;   _laUpdateTile('la-corn',_laPFmt(v.price)+'\xa2/bu',_laChgFmt(v.change),_laChgColor(v.change)); } },
+  wheat:  { ids:['la-wheat'],  commodity:true, fetch:async(d)=>{ const v=await _laFetchYahoo('ZW%3DF'); d.wheat=v;  _laUpdateTile('la-wheat',_laPFmt(v.price)+'\xa2/bu',_laChgFmt(v.change),_laChgColor(v.change)); } },
+  soy:    { ids:['la-soy'],    commodity:true, fetch:async(d)=>{ const v=await _laFetchYahoo('ZS%3DF'); d.soy=v;    _laUpdateTile('la-soy',_laPFmt(v.price)+'\xa2/bu',_laChgFmt(v.change),_laChgColor(v.change)); } },
   natgas: {
     ids: ['la-natgas'],
+    commodity: true,
     fetch: async(d) => {
       for (const sym of ['NG%3DF','NGG25.NYM','UNG']) {
         try { const v=await _laFetchYahoo(sym); if(v?.price){d.natgas=v; _laUpdateTile('la-natgas','$'+_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change)); return;} } catch(e){}
@@ -5072,10 +5073,14 @@ async function liveActionRunAll(d, includeSlow) {
   const jobs = Object.entries(LA_SOURCES)
     .filter(([key,src]) => {
       if (src.slow) return !!includeSlow;
-      // On normal refresh, skip index sources whose market is currently closed
-      if (!includeSlow && src.marketTile) {
-        const mkt = LA_INDEX_MARKETS[src.marketTile];
-        if (mkt && !_laIsMarketOpen(mkt.tz, mkt.sessions)) return false;
+      if (!includeSlow) {
+        // Skip index sources whose market is currently closed
+        if (src.marketTile) {
+          const mkt = LA_INDEX_MARKETS[src.marketTile];
+          if (mkt && !_laIsMarketOpen(mkt.tz, mkt.sessions)) return false;
+        }
+        // Skip commodity sources if data is less than 24h old
+        if (src.commodity && d.commodityTs && Date.now()-d.commodityTs < 24*60*60*1000) return false;
       }
       return true;
     })
