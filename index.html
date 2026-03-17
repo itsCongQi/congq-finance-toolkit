@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.m4qr9</div>
+    <div class="sidebar-footer">v.k7n2p</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4947,13 +4947,33 @@ const LA_SOURCES = {
     ids: ['la-fedrate'],
     slow: true, tsKey: 'fedRateTs',
     fetch: async(d) => {
-      const fredUrl = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS';
-      const j = await _laProxyFetch(fredUrl);
+      let val = null;
+      // Primary: NY Fed EFFR API (no proxy needed)
+      try {
+        const r = await _laFetchWithTimeout('https://markets.newyorkfed.org/api/rates/effr/last/1.json');
+        const j = await r.json();
+        val = j?.refRates?.[0]?.percentRate ?? null;
+      } catch(e) {}
+      // Fallback: FRED CSV via proxy
+      if (val == null) {
+        const j = await _laProxyFetch('https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS');
+        const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
+        for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
+      }
+      d.fedRate = val; d.fedRateTs = Date.now();
+      _laUpdateTile('la-fedrate', val!=null?val.toFixed(2)+'%':'—', 'Federal Reserve');
+    }
+  },
+  us1y: {
+    ids: ['la-us1y'],
+    slow: true, tsKey: 'us1yTs',
+    fetch: async(d) => {
+      const j = await _laProxyFetch('https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS1');
       const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
       let val=null;
       for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
-      d.fedRate = val; d.fedRateTs = Date.now();
-      _laUpdateTile('la-fedrate', val!=null?val.toFixed(2)+'%':'—', 'Federal Reserve');
+      d.us1y = val; d.us1yTs = Date.now();
+      _laUpdateTile('la-us1y', val!=null?val.toFixed(2)+'%':'—', '1Y Treasury (FRED)');
     }
   },
   sp500: {
@@ -5144,6 +5164,7 @@ function liveActionRender(d) {
     )+
     sec('Bonds & Interest Rates') + row(
       slowTile('la-fedrate','Fed Funds Rate',d.fedRate!=null?d.fedRate.toFixed(2)+'%':null,'Federal Reserve','var(--text)','fedRateTs','fedrate')+
+      slowTile('la-us1y','US 1Y Treasury',d.us1y!=null?d.us1y.toFixed(2)+'%':null,'1Y Treasury (FRED)','var(--text)','us1yTs','us1y')+
       slowTile('la-us10y','US 10Y Treasury',v('us10y')?v('us10y').price.toFixed(3)+'%':null,chg('us10y'),cc('us10y'),'us10yTs','us10y')+
       slowTile('la-us3m','US 3M Treasury',v('us3m')?v('us3m').price.toFixed(3)+'%':null,chg('us3m'),cc('us3m'),'us3mTs','us3m')
     )+
