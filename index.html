@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.h4w8j</div>
+    <div class="sidebar-footer">v.t2r6m</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -1667,15 +1667,6 @@ body::after {
           <div class="field" style="min-width:90px"><label>Expected APY (%)</label><input type="number" id="defi-add-apy" placeholder="8.5" step="0.1" min="0"></div>
           <div class="field" style="min-width:130px"><label>Start Date</label><input type="date" id="defi-add-date"></div>
           <div class="field" style="min-width:130px"><label>Maturity Date <span style="font-size:10px;color:var(--text4)">(optional)</span></label><input type="date" id="defi-add-maturity"></div>
-          <div style="display:flex;align-items:flex-end;padding-bottom:10px">
-            <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
-              <input type="checkbox" id="defi-add-link-mortgage" style="display:none">
-              <span id="defi-link-toggle" onclick="var cb=document.getElementById('defi-add-link-mortgage');cb.checked=!cb.checked;this.style.background=cb.checked?'var(--blue)':'rgba(0,0,0,0.12)';this.firstElementChild.style.transform=cb.checked?'translateX(16px)':'translateX(0)'" style="position:relative;display:inline-block;width:36px;height:20px;background:rgba(0,0,0,0.12);border-radius:99px;transition:background 0.2s;flex-shrink:0;cursor:pointer">
-                <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.25);transition:transform 0.2s;pointer-events:none"></span>
-              </span>
-              <span class="tooltip-hint" style="font-size:12px;font-weight:600;color:var(--text2);cursor:default" data-tip="Automatically adds this strategy to Loaned Capital tracking and syncs all reward claims as income transactions there.">Link to Loaned Capital</span>
-            </div>
-          </div>
           <div style="display:flex;align-items:flex-end">
             <button class="btn btn-primary" onclick="defiAddStrategy()">
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
@@ -4018,30 +4009,16 @@ function defiAddStrategy() {
   const apy = parseFloat(document.getElementById('defi-add-apy').value);
   const date = document.getElementById('defi-add-date').value || new Date().toISOString().slice(0,10);
   const maturity = document.getElementById('defi-add-maturity').value || null;
-  const linkMortgage = document.getElementById('defi-add-link-mortgage')?.checked || false;
   if (!name || isNaN(amount) || amount<=0 || isNaN(apy)) { alert('Please fill in name, deployed amount, and expected APY.'); return; }
 
   const newId = Date.now();
-  defiStrategies.unshift({ id:newId, name, type, amount, apy, date, maturity, active:true, claims:[], linkedToMortgage:linkMortgage, capitalHistory:[{id:newId+'_0', date, amount, type:'deploy', note:'Initial deployment'}] });
-
-  // ── Sync to Loaned Capital tracking ──
-  if (linkMortgage) {
-    const lv2TypeMap = { lending:'defi-stable', lp:'defi-lp', pt:'defi-pendle', yt:'defi-pendle', staking:'defi-stable', looping:'defi-looping', restaking:'defi-stable', perp:'other', other:'other' };
-    lv2Strategies.push({ id:newId, name, amount, apy, type:lv2TypeMap[type]||'other', date, maturity:null, matured:false, maturedDate:null, realizedIncome:null, maturedNote:'', _defiLinked:true });
-    lv2Update(); lv2Save();
-    showToast('Added + synced to Loaned Capital ✓');
-  } else {
-    showToast('Strategy added');
-  }
+  defiStrategies.unshift({ id:newId, name, type, amount, apy, date, maturity, active:true, claims:[], linkedToMortgage:false, capitalHistory:[{id:newId+'_0', date, amount, type:'deploy', note:'Initial deployment'}] });
 
   document.getElementById('defi-add-name').value = '';
   document.getElementById('defi-add-amount').value = '';
   document.getElementById('defi-add-apy').value = '';
   document.getElementById('defi-add-maturity').value = '';
-  document.getElementById('defi-add-link-mortgage').checked = false;
-  const tog = document.getElementById('defi-link-toggle');
-  if (tog) { tog.style.background='rgba(0,0,0,0.12)'; tog.children[0].style.transform='translateX(0)'; }
-  defiSave(); defiRender();
+  defiSave(); defiRender(); showToast('Strategy added');
 }
 function defiRemoveStrategy(id) {
   if (!confirm('Remove this strategy and all its claim history?')) return;
@@ -4059,6 +4036,31 @@ function defiToggleActive(id) {
   s.active = !s.active;
   defiSave(); defiRender();
   if (s.linkedToMortgage) lv2Update();
+}
+function defiToggleLoanLink(id) {
+  const s = defiStrategies.find(x=>x.id===id); if (!s) return;
+  const lv2TypeMap = { lending:'defi-stable', lp:'defi-lp', pt:'defi-pendle', yt:'defi-pendle', staking:'defi-stable', looping:'defi-looping', restaking:'defi-stable', perp:'other', other:'other' };
+  if (!s.linkedToMortgage) {
+    s.linkedToMortgage = true;
+    if (!lv2Strategies.find(x=>x.id===id))
+      lv2Strategies.push({ id, name:s.name, amount:s.amount, apy:s.apy, type:lv2TypeMap[s.type]||'other', date:s.date, maturity:null, matured:false, maturedDate:null, realizedIncome:null, maturedNote:'', _defiLinked:true });
+    s.claims.forEach(c => {
+      if (!lv2Log.find(t=>t.id===c.id))
+        lv2Log.push({ id:c.id, date:c.date, type:'income-yield', amount:c.amount, desc:s.name+' reward claim', _defiLinked:true, _defiStratId:id });
+      if (c.gas > 0 && !lv2Log.find(t=>t.id===c.id+1))
+        lv2Log.push({ id:c.id+1, date:c.date, type:'payment-fee', amount:c.gas, desc:s.name+' gas fee', _defiLinked:true, _defiStratId:id });
+    });
+    lv2Log.sort((a,b)=>b.date.localeCompare(a.date));
+    lv2Update(); lv2Save();
+    showToast('Linked to Loaned Capital ✓');
+  } else {
+    s.linkedToMortgage = false;
+    lv2Strategies = lv2Strategies.filter(x=>x.id!==id);
+    lv2Log = lv2Log.filter(t=>t._defiStratId!==id);
+    lv2Update(); lv2Save();
+    showToast('Unlinked from Loaned Capital');
+  }
+  defiSave(); defiRender();
 }
 
 /* ── Claims ── */
@@ -4357,6 +4359,7 @@ function defiRender() {
             <div class="defi-claims-title">Reward Claims (${s.claims.length})</div>
             <div style="display:flex;gap:8px">
               <button class="btn-icon-sm" style="font-size:11px;padding:3px 10px;color:${s.active?'var(--text3)':'var(--green)'};border-color:${s.active?'var(--border-med)':'rgba(52,199,89,0.3)'}" onclick="defiToggleActive(${s.id})">${s.active?'Mark Closed':'Mark Active'}</button>
+              <button class="btn-icon-sm" style="font-size:11px;padding:3px 10px;color:${s.linkedToMortgage?'var(--blue)':'var(--text3)'};border-color:${s.linkedToMortgage?'rgba(0,122,255,0.3)':'var(--border-med)'};background:${s.linkedToMortgage?'rgba(0,122,255,0.06)':'transparent'}" onclick="defiToggleLoanLink(${s.id})" title="Toggle sync with Loaned Capital tracker">${s.linkedToMortgage?'⇄ Loan Linked':'Link to Loan Capital'}</button>
               <button class="btn-icon-sm del" onclick="defiRemoveStrategy(${s.id})" style="font-size:11px;padding:3px 10px">Remove Strategy</button>
             </div>
           </div>
