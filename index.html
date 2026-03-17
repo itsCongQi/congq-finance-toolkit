@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.m7x2q</div>
+    <div class="sidebar-footer">v.k9p3n</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -5227,22 +5227,25 @@ function liveActionRender(d) {
     const mkt = LA_INDEX_MARKETS[id];
     const open = mkt ? _laIsMarketOpen(mkt.tz, mkt.sessions) : null;
     const statusHtml = mkt ? `<span style="font-size:9px;color:${open?'var(--green)':'var(--text4)'}">${open?'●':'○'} ${open?'Open':'Closed'}</span>` : '<span></span>';
-    const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshIndex('${id}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>`;
+    const _ico = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>`;
+    const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshIndex('${id}')" title="Refresh" style="background:none;border:none;color:var(--blue);cursor:pointer;padding:2px;line-height:0;opacity:0.8">${_ico}</button>`;
     const extra = `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">${statusHtml}${refreshBtn}</div>`;
     return _tileBase(id, label, val, sub, color, extra);
   };
   const commodityTile = (id, label, val, sub, color) => {
+    const _ico = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>`;
     const ageStr = d.commodityTs ? fmtAge(Date.now()-d.commodityTs) : null;
     const tsHtml = ageStr ? `<span style="font-size:9px;color:var(--text4)">${ageStr}</span>` : '<span></span>';
-    const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshTile('${id}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>`;
+    const refreshBtn = `<button onclick="event.stopPropagation();liveActionRefreshTile('${id}')" title="Refresh" style="background:none;border:none;color:var(--blue);cursor:pointer;padding:2px;line-height:0;opacity:0.8">${_ico}</button>`;
     const extra = `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">${tsHtml}${refreshBtn}</div>`;
     return _tileBase(id, label, val, sub, color, extra);
   };
   const slowTile = (id, label, val, sub, color, tsKey, srcKey) => {
+    const _ico = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>`;
     const ts = d[tsKey];
     const ageStr = ts ? fmtAge(Date.now()-ts) : null;
-    const btnLabel = ageStr ? `${ageStr} · <button onclick="event.stopPropagation();liveActionRefreshSlow('${srcKey}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button>` : `<button onclick="event.stopPropagation();liveActionRefreshSlow('${srcKey}')" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Load</button>`;
-    const extra = `<div style="font-size:9px;color:var(--text4);margin-top:3px">${btnLabel}</div>`;
+    const btnLabel = ageStr ? `${ageStr} · <button onclick="event.stopPropagation();liveActionRefreshSlow('${srcKey}')" title="Refresh" style="background:none;border:none;color:var(--blue);cursor:pointer;padding:2px;line-height:0;opacity:0.8">${_ico}</button>` : `<button onclick="event.stopPropagation();liveActionRefreshSlow('${srcKey}')" title="Load" style="background:none;border:none;color:var(--blue);cursor:pointer;padding:2px;line-height:0;opacity:0.8">${_ico}</button>`;
+    const extra = `<div style="font-size:9px;color:var(--text4);margin-top:3px;display:flex;align-items:center;gap:2px">${btnLabel}</div>`;
     return _tileBase(id, label, val, sub, color, extra);
   };
 
@@ -5267,7 +5270,8 @@ function liveActionRender(d) {
   const sec = l => `<div style="margin-bottom:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">${l}</div>`;
   const secWithTs = (l, ts, fn) => {
     const ageStr = ts ? fmtAge(Date.now()-ts) : null;
-    const tsHtml = `<span style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:8px;color:var(--text4)">${ageStr?ageStr+' · ':''}<button onclick="${fn}()" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button></span>`;
+    const _ico = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>`;
+    const tsHtml = `<span style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:8px;color:var(--text4)">${ageStr?ageStr+' · ':''}<button onclick="${fn}()" title="Refresh" style="background:none;border:none;color:var(--blue);cursor:pointer;padding:2px;line-height:0;opacity:0.8;vertical-align:middle">${_ico}</button></span>`;
     return `<div style="margin-bottom:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">${l}${tsHtml}</div>`;
   };
   const row = t => `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${t}</div>`;
