@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.h2wm6</div>
+    <div class="sidebar-footer">v.p9ds4</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4980,7 +4980,7 @@ const LA_SOURCES = {
     ids: ['la-sp500','la-equitysentiment','la-tradsentiment'],
     fetch: async(d) => {
       const v = await _laFetchYahoo('%5EGSPC');
-      d.sp500=v;
+      d.sp500=v; d.indexTs=Date.now();
       _laUpdateTile('la-sp500',_laPFmt(v.price),_laChgFmt(v.change),_laChgColor(v.change));
       if (v.change!=null) {
         const c=v.change;
@@ -5070,6 +5070,21 @@ window.liveActionRetry = async function(tileId) {
   }
 };
 
+// Called when user clicks ↻ Refresh on an index section header
+window.liveActionRefreshIndexes = async function() {
+  const indexKeys = ['sp500','nasdaq','qqq','shanghai','hsi','kospi','nikkei','twii'];
+  const d = window._laData = window._laData || {};
+  indexKeys.forEach(k => LA_SOURCES[k]?.ids.forEach(id => _laSetLoading(id)));
+  const save = () => { try { localStorage.setItem(LIVE_ACTION_LS, JSON.stringify(d)); } catch(e) {} };
+  const jobs = indexKeys.map(k => LA_SOURCES[k]).filter(Boolean).map(src =>
+    src.fetch(d).then(save).catch(() => src.fetch(d).then(save)).catch(() => src.ids.forEach(id => _laSetUnavailable(id)))
+  );
+  await Promise.allSettled(jobs);
+  d.indexTs = Date.now();
+  save();
+  liveActionRender(d);
+};
+
 // Called for manual refresh of a slow source tile, or background check on load
 window.liveActionRefreshSlow = async function(key, background) {
   const src = LA_SOURCES[key];
@@ -5142,6 +5157,11 @@ function liveActionRender(d) {
   const fgColor=!fg?'var(--text3)':fg.value>=60?'var(--green)':fg.value>=40?'var(--orange)':'var(--red)';
 
   const sec = l => `<div style="margin-bottom:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">${l}</div>`;
+  const secWithTs = (l, ts, fn) => {
+    const ageStr = ts ? fmtAge(Date.now()-ts) : null;
+    const tsHtml = `<span style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:8px;color:var(--text4)">${ageStr?ageStr+' · ':''}<button onclick="${fn}()" style="background:none;border:none;color:var(--blue);font-size:9px;cursor:pointer;padding:0;font-weight:600">↻ Refresh</button></span>`;
+    return `<div style="margin-bottom:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">${l}${tsHtml}</div>`;
+  };
   const row = t => `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${t}</div>`;
 
   content.innerHTML =
@@ -5150,12 +5170,12 @@ function liveActionRender(d) {
       tile('la-equitysentiment','US Equity Sentiment',d.equitySentiment||null,'Based on index moves',sentColor(d.equitySentiment))+
       tile('la-feargreed','BTC Fear & Greed',fg?`${fg.value} · ${fg.label}`:null,'Alternative.me index',fgColor)
     )+
-    sec('US Equity Indexes') + row(
+    secWithTs('US Equity Indexes',d.indexTs,'liveActionRefreshIndexes') + row(
       tile('la-sp500','S&P 500',price('sp500'),chg('sp500'),cc('sp500'))+
       tile('la-nasdaq','NASDAQ',price('nasdaq'),chg('nasdaq'),cc('nasdaq'))+
       tile('la-qqq','QQQ ETF',price('qqq'),chg('qqq'),cc('qqq'))
     )+
-    sec('Asia-Pacific Indexes') + row(
+    secWithTs('Asia-Pacific Indexes',d.indexTs,'liveActionRefreshIndexes') + row(
       tile('la-shanghai','Shanghai (CN)',price('shanghai'),chg('shanghai'),cc('shanghai'))+
       tile('la-hsi','Hang Seng (HK)',price('hsi'),chg('hsi'),cc('hsi'))+
       tile('la-kospi','KOSPI (KR)',price('kospi'),chg('kospi'),cc('kospi'))+
