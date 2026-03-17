@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.g1mx5</div>
+    <div class="sidebar-footer">v.a8zr3</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4960,17 +4960,19 @@ const LA_SOURCES = {
     slow: true, tsKey: 'fedRateTs',
     fetch: async(d) => {
       let val = null;
-      // Primary: NY Fed EFFR API (no proxy needed)
+      // Primary: NY Fed EFFR via proxy (direct fetch often blocked by CORS)
       try {
-        const r = await _laFetchWithTimeout('https://markets.newyorkfed.org/api/rates/effr/last/1.json');
-        const j = await r.json();
-        val = j?.refRates?.[0]?.percentRate ?? null;
+        const j = await _laProxyFetch('https://markets.newyorkfed.org/api/rates/effr/last/1.json');
+        const data = JSON.parse(j.contents);
+        val = data?.refRates?.[0]?.percentRate ?? null;
       } catch(e) {}
       // Fallback: FRED CSV via proxy
       if (val == null) {
-        const j = await _laProxyFetch('https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS');
-        const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
-        for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
+        try {
+          const j = await _laProxyFetch('https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS');
+          const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
+          for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
+        } catch(e) {}
       }
       d.fedRate = val; d.fedRateTs = Date.now();
       _laUpdateTile('la-fedrate', val!=null?val.toFixed(2)+'%':'—', 'Federal Reserve');
@@ -4980,12 +4982,24 @@ const LA_SOURCES = {
     ids: ['la-us1y'],
     slow: true, tsKey: 'us1yTs',
     fetch: async(d) => {
-      const j = await _laProxyFetch('https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS1');
-      const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
-      let val=null;
-      for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
+      let val = null;
+      // Primary: US Treasury XML yield curve feed
+      try {
+        const ym = new Date().toISOString().slice(0,7).replace('-','');
+        const j = await _laProxyFetch(`https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=${ym}`);
+        const matches = [...(j.contents||'').matchAll(/<d:BC_1YEAR[^>]*>([\d.]+)<\/d:BC_1YEAR>/g)];
+        if (matches.length) val = parseFloat(matches[matches.length-1][1]);
+      } catch(e) {}
+      // Fallback: FRED DGS1 via proxy
+      if (val == null) {
+        try {
+          const j = await _laProxyFetch('https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS1');
+          const lines = (j.contents||'').trim().split('\n').filter(l=>l&&!l.startsWith('DATE'));
+          for (let i=lines.length-1;i>=0;i--) { const v=parseFloat(lines[i].split(',')[1]); if(!isNaN(v)&&v>0){val=v;break;} }
+        } catch(e) {}
+      }
       d.us1y = val; d.us1yTs = Date.now();
-      _laUpdateTile('la-us1y', val!=null?val.toFixed(2)+'%':'—', '1Y Treasury (FRED)');
+      _laUpdateTile('la-us1y', val!=null?val.toFixed(2)+'%':'—', '1Y Treasury');
     }
   },
   sp500: {
