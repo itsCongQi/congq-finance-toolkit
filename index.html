@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.k9p3n</div>
+    <div class="sidebar-footer">v.h4w8j</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4336,7 +4336,7 @@ function defiRender() {
             let running = defiEffectiveAmount(s);
             return `<table class="defi-claim-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance After</th><th>Note</th><th></th></tr></thead><tbody>`
               + hist.map((e,i) => {
-                  const isInitial = i === hist.length-1;
+                  const isInitial = String(e.id) === String(s.id) + '_0';
                   const balAfter = running;
                   running += e.type==='withdraw' ? e.amount : -e.amount;
                   return `<tr>
