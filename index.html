@@ -917,7 +917,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.c4vp1</div>
+    <div class="sidebar-footer">v.m7x2q</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4779,7 +4779,7 @@ async function liveActionLoad() {
   if (cached) {
     window._laData = cached; // preserve slow data across fast refreshes
     liveActionRender(cached); // show stale data immediately
-    if (Date.now() - cached.ts >= LIVE_ACTION_TTL) liveActionFetch(true, true); // background refresh if stale
+    if (Date.now() - cached.ts >= LIVE_ACTION_TTL || !cached.commodityTs) liveActionFetch(true, true); // background refresh if stale or missing commodity timestamps
     // Background-refresh any slow source whose data is older than SLOW_TTL
     const now = Date.now();
     for (const [key, src] of Object.entries(LA_SOURCES)) {
