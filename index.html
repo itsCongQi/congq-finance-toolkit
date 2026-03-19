@@ -927,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.r4t9w</div>
+    <div class="sidebar-footer">v.m8c3j</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -3007,8 +3007,22 @@ async function cshFetch30dAgoPrice(symbol) {
       if (isFinite(p) && p > 0) return p;
     } catch(e) {}
   }
-  // CoinGecko fallback
-  const id = KNOWN_CG_IDS[symbol] || gcIdCache[symbol];
+  // CoinGecko fallback — resolve ID if not already cached (live price may have used Binance)
+  let id = KNOWN_CG_IDS[symbol] || gcIdCache[symbol];
+  if (!id) {
+    try {
+      const sr = await fetch('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(symbol));
+      if (sr.ok) {
+        const sd = await sr.json();
+        const m = (sd.coins || []).filter(c => c.symbol.toUpperCase() === symbol);
+        if (m.length) {
+          m.sort((a, b) => (a.market_cap_rank || 9999) - (b.market_cap_rank || 9999));
+          id = m[0].id;
+          gcIdCache[symbol] = id; // cache for future calls
+        }
+      }
+    } catch(e) {}
+  }
   if (id) {
     try {
       const res = await fetch('https://api.coingecko.com/api/v3/coins/' + id + '/market_chart?vs_currency=usd&days=30&interval=daily');
