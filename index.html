@@ -927,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.h3p9x</div>
+    <div class="sidebar-footer">v.k2m7q</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -3021,11 +3021,11 @@ async function cshFetch30dAgoPrice(symbol) {
 }
 
 async function cshApply1MvsBtc(tokList) {
-  // Fetch BTC baseline (reuse cached if already fetched this session)
+  // Fetch BTC baseline — only update if fetch succeeds, keep cached value on failure
   const btcTok = cshTokens.find(t => t.symbol === 'BTC');
   const btcNow = btcTok ? cshGetPrice(btcTok) : (await cshFetchPrice('BTC')).price;
   const btc30d = await cshFetch30dAgoPrice('BTC');
-  cshBtc1MChange = (btc30d && btcNow) ? (btcNow / btc30d - 1) * 100 : null;
+  if (btc30d && btcNow) cshBtc1MChange = (btcNow / btc30d - 1) * 100;
 
   for (const tok of tokList) {
     if (tok.priceMode === 'manual') { tok.change1M = null; tok.change1MvsBtc = null; continue; }
@@ -3035,9 +3035,8 @@ async function cshApply1MvsBtc(tokList) {
       tok.price30d = p30d;
       tok.change1M = (nowP / p30d - 1) * 100;
       tok.change1MvsBtc = cshBtc1MChange !== null ? tok.change1M - cshBtc1MChange : null;
-    } else {
-      tok.price30d = null; tok.change1M = null; tok.change1MvsBtc = null;
     }
+    // else: keep existing cached price30d/change1M/change1MvsBtc — don't wipe on API failure
   }
 }
 
@@ -4668,6 +4667,9 @@ renderRealized();
 defiLoad(); defiRender();
 lsStratLoad(); lsStratRender();
 cshLoad();
+// Restore cshBtc1MChange from cached token data so displays work before next refresh
+{ const ref = cshTokens.find(t => t.change1M != null && t.change1MvsBtc != null);
+  if (ref) cshBtc1MChange = ref.change1M - ref.change1MvsBtc; }
 cshRenderAll();
 if (cshTokens.length) cshRefreshAll();
 adLoadSaved();
