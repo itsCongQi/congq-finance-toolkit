@@ -926,7 +926,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.9kx4p</div>
+    <div class="sidebar-footer">v.m2w7n</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -2599,16 +2599,28 @@ function dlCalc() {
   document.getElementById('dl-results-meta').textContent =
     yieldPct + '% yield · ' + borrowPct + '% borrow · ' + ltvPct + '% LTV · ' + loops + ' loop' + (loops !== 1 ? 's' : '');
 
-  // Per-loop table
-  let loopHtml = '<div class="brow brow-head"><span class="bk">Loop</span><span class="bv" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 8px;text-align:right;font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.03em">Deposited&nbsp;&nbsp;Borrowed&nbsp;&nbsp;Yield&nbsp;&nbsp;Borrow&nbsp;Cost</span></div>';
-  loopData.forEach(r => {
-    loopHtml += '<div class="brow"><span class="bk" style="font-size:12px">Loop ' + r.loop + (r.loop === 0 ? ' <span style="color:var(--text3);font-weight:400">(initial)</span>' : '') + '</span>' +
-      '<span class="bv" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 8px;text-align:right;font-size:12px">' +
-      '<span>' + fmt$(r.deposited) + '</span>' +
-      '<span style="color:var(--text3)">' + (r.borrowed > 0 ? fmt$(r.borrowed) : '—') + '</span>' +
-      '<span style="color:var(--green)">' + fmt$(r.yieldEarned) + '</span>' +
-      '<span style="color:var(--red)">' + (r.borrowCost > 0 ? fmt$(r.borrowCost) : '—') + '</span>' +
-      '</span></div>';
+  // Per-loop table — shared 5-column grid so headers align with data
+  const colStyle = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:0;padding:0';
+  const cellBase = 'padding:10px 16px;font-size:12px;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--border);';
+  const hCell    = cellBase + 'font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;';
+  let loopHtml = '<div style="' + colStyle + '">' +
+    '<div style="' + hCell + '">Loop</div>' +
+    '<div style="' + hCell + 'text-align:right">Deposited</div>' +
+    '<div style="' + hCell + 'text-align:right">Borrowed</div>' +
+    '<div style="' + hCell + 'text-align:right">Yield</div>' +
+    '<div style="' + hCell + 'text-align:right">Borrow Cost</div>' +
+    '</div>';
+  loopData.forEach((r, idx) => {
+    const rowBg = idx % 2 === 1 ? 'background:rgba(0,0,0,0.015);' : '';
+    const last  = idx === loopData.length - 1 ? 'border-bottom:none;' : '';
+    const cell  = cellBase + rowBg + last;
+    loopHtml += '<div style="' + colStyle + '">' +
+      '<div style="' + cell + 'color:var(--text2);font-weight:500">Loop ' + r.loop + (r.loop === 0 ? ' <span style="color:var(--text3);font-weight:400;font-size:11px">(initial)</span>' : '') + '</div>' +
+      '<div style="' + cell + 'text-align:right;color:var(--text);font-weight:600">' + fmt$(r.deposited) + '</div>' +
+      '<div style="' + cell + 'text-align:right;color:var(--text3)">' + (r.borrowed > 0 ? fmt$(r.borrowed) : '—') + '</div>' +
+      '<div style="' + cell + 'text-align:right;color:var(--green);font-weight:600">' + fmt$(r.yieldEarned) + '</div>' +
+      '<div style="' + cell + 'text-align:right;color:' + (r.borrowCost > 0 ? 'var(--red)' : 'var(--text3)') + '">' + (r.borrowCost > 0 ? fmt$(r.borrowCost) : '—') + '</div>' +
+      '</div>';
   });
   document.getElementById('dl-loop-rows').innerHTML = loopHtml;
 
