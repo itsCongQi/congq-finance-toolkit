@@ -927,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.m8c3j</div>
+    <div class="sidebar-footer">v.f6n2p</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -2926,6 +2926,7 @@ const KNOWN_CG_IDS = {
   WIF:'dogwifcoin', BONK:'bonk', PEPE:'pepe', SHIB:'shiba-inu', DOGE:'dogecoin',
   TON:'the-open-network', NOT:'notcoin', EIGEN:'eigenlayer', ENA:'ethena',
   PYTH:'pyth-network', WLD:'worldcoin-wld', STRK:'starknet', ZK:'zksync',
+  USUAL:'usual',
 };
 
 async function cshFetchFromBinance(symbol) {
@@ -2996,7 +2997,18 @@ let cshBtc1MChange = null; // cached so we only fetch BTC once per refresh
 
 async function cshFetch30dAgoPrice(symbol) {
   symbol = symbol.toUpperCase();
-  // Binance klines — 31 daily candles, oldest close ≈ 30d ago
+  // If we have a known CoinGecko ID, try it first — more reliable for historical data
+  const knownId = KNOWN_CG_IDS[symbol] || gcIdCache[symbol];
+  if (knownId) {
+    try {
+      const res = await fetch('https://api.coingecko.com/api/v3/coins/' + knownId + '/market_chart?vs_currency=usd&days=30&interval=daily');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.prices?.length) return data.prices[0][1];
+      }
+    } catch(e) {}
+  }
+  // Binance klines fallback — 31 daily candles, oldest close ≈ 30d ago
   for (const pair of [symbol + 'USDT', symbol + 'USDC']) {
     try {
       const res = await fetch('https://api.binance.com/api/v3/klines?symbol=' + pair + '&interval=1d&limit=31');
@@ -3007,9 +3019,8 @@ async function cshFetch30dAgoPrice(symbol) {
       if (isFinite(p) && p > 0) return p;
     } catch(e) {}
   }
-  // CoinGecko fallback — resolve ID if not already cached (live price may have used Binance)
-  let id = KNOWN_CG_IDS[symbol] || gcIdCache[symbol];
-  if (!id) {
+  // Last resort: CoinGecko search to resolve unknown ID, then market chart
+  if (!knownId) {
     try {
       const sr = await fetch('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(symbol));
       if (sr.ok) {
@@ -3017,18 +3028,12 @@ async function cshFetch30dAgoPrice(symbol) {
         const m = (sd.coins || []).filter(c => c.symbol.toUpperCase() === symbol);
         if (m.length) {
           m.sort((a, b) => (a.market_cap_rank || 9999) - (b.market_cap_rank || 9999));
-          id = m[0].id;
-          gcIdCache[symbol] = id; // cache for future calls
+          const id = m[0].id;
+          gcIdCache[symbol] = id;
+          const res = await fetch('https://api.coingecko.com/api/v3/coins/' + id + '/market_chart?vs_currency=usd&days=30&interval=daily');
+          if (res.ok) { const data = await res.json(); if (data.prices?.length) return data.prices[0][1]; }
         }
       }
-    } catch(e) {}
-  }
-  if (id) {
-    try {
-      const res = await fetch('https://api.coingecko.com/api/v3/coins/' + id + '/market_chart?vs_currency=usd&days=30&interval=daily');
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      if (data.prices?.length) return data.prices[0][1];
     } catch(e) {}
   }
   return null;
@@ -3355,7 +3360,7 @@ function cshRenderTokenCard(tok, existing) {
       </div>
       <div class="csh-token-price-wrap">
         <div>
-          <div style="display:flex;align-items:center;gap:6px${change24h !== null ? ';margin-bottom:3px' : ''}">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
             ${isManual
               ? `<div class="csh-price-rel" onclick="event.stopPropagation()">
                   <span class="csh-price-prefix">$</span>
@@ -3371,7 +3376,7 @@ function cshRenderTokenCard(tok, existing) {
               <span class="csh-price-toggle-opt csh-toggle-manual${isManual?' active-manual':''}">Manual</span>
             </span>
           </div>
-          ${change24h !== null ? `<div><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${changeBg};color:${changeColor}">${change24h>=0?'+':''}${change24h.toFixed(2)}%</span></div>` : ''}
+          <div style="height:18px;display:flex;align-items:center">${change24h !== null ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${changeBg};color:${changeColor}">${change24h>=0?'+':''}${change24h.toFixed(2)}%</span>` : ''}</div>
         </div>
       </div>
       <div class="csh-header-stats">
