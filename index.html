@@ -927,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.k2m7q</div>
+    <div class="sidebar-footer">v.r4t9w</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -3219,6 +3219,8 @@ function cshSetManualPrice(tokenId, val) {
 /* ── Render ── */
 function cshFmt(n) { return (n<0?'−$':'$') + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function cshFmtQ(n) { return n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:8}); }
+// Compact dollar format for header stats — keeps values short to prevent overflow
+function cshFmtCmp(n) { const a=Math.abs(n),s=n>=0?'+$':'−$'; if(a>=1e6) return s+(a/1e6).toFixed(1)+'M'; if(a>=1e3) return s+(a/1e3).toFixed(1)+'K'; return (n>=0?'+':'')+cshFmt(n); }
 function cshPnlClass(n) { return n > 0 ? 'pos' : n < 0 ? 'neg' : ''; }
 function cshPnlSign(n) { return (n >= 0 ? '+' : '') + cshFmt(n); }
 
@@ -3339,7 +3341,7 @@ function cshRenderTokenCard(tok, existing) {
       </div>
       <div class="csh-token-price-wrap">
         <div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px${change24h !== null ? ';margin-bottom:3px' : ''}">
             ${isManual
               ? `<div class="csh-price-rel" onclick="event.stopPropagation()">
                   <span class="csh-price-prefix">$</span>
@@ -3350,17 +3352,17 @@ function cshRenderTokenCard(tok, existing) {
                 </div>`
               : `<span class="csh-token-price">${price > 0 ? '$'+price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:6}) : '—'}</span>`
             }
-            ${change24h !== null ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${changeBg};color:${changeColor}">${change24h>=0?'+':''}${change24h.toFixed(2)}%</span>` : ''}
             <span class="csh-price-toggle" onclick="event.stopPropagation();cshTogglePriceMode(${tok.id})" title="Toggle between live and manual price">
               <span class="csh-price-toggle-opt csh-toggle-live${isManual?'':' active-live'}">Live</span>
               <span class="csh-price-toggle-opt csh-toggle-manual${isManual?' active-manual':''}">Manual</span>
             </span>
           </div>
+          ${change24h !== null ? `<div><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${changeBg};color:${changeColor}">${change24h>=0?'+':''}${change24h.toFixed(2)}%</span></div>` : ''}
         </div>
       </div>
       <div class="csh-header-stats">
         ${change24h !== null && pnl.holdingQty > 0 ? `<div class="csh-hstat">
-          <div class="csh-hstat-val" style="color:${changeColor}">${change24h>=0?'+':''}${cshFmt(price * pnl.holdingQty * change24h / 100)}</div>
+          <div class="csh-hstat-val" style="color:${changeColor}">${cshFmtCmp(price * pnl.holdingQty * change24h / 100)}</div>
           <div class="csh-hstat-label">24h Change</div>
         </div>` : ''}
         ${tok.change1MvsBtc != null ? `<div class="csh-hstat">
@@ -3368,11 +3370,11 @@ function cshRenderTokenCard(tok, existing) {
           <div class="csh-hstat-label">1M vs BTC</div>
         </div>` : ''}
         <div class="csh-hstat">
-          <div class="csh-hstat-val" style="color:${pnlColor}">${pnlSign}${cshFmt(pnl.unrealizedPnl)}</div>
+          <div class="csh-hstat-val" style="color:${pnlColor}">${cshFmtCmp(pnl.unrealizedPnl)}</div>
           <div class="csh-hstat-label">Unrealized</div>
         </div>
         <div class="csh-hstat">
-          <div class="csh-hstat-val" style="color:${pnl.realizedPnl>=0?'var(--green)':'var(--red)'}">${pnl.realizedPnl>=0?'+':''}${cshFmt(pnl.realizedPnl)}</div>
+          <div class="csh-hstat-val" style="color:${pnl.realizedPnl>=0?'var(--green)':'var(--red)'}">${cshFmtCmp(pnl.realizedPnl)}</div>
           <div class="csh-hstat-label">Realized</div>
         </div>
         <div class="csh-hstat">
