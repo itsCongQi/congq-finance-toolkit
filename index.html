@@ -926,7 +926,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.j5f8q</div>
+    <div class="sidebar-footer">v.p3n6r</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -2899,6 +2899,7 @@ async function cshLoadFromFirestore() {
     try { localStorage.setItem(CSH_LS, JSON.stringify(cshTokens)); } catch(e) {}
     cshRenderAll();
     if (window._setSyncStatus) window._setSyncStatus('connected', 'Cloud sync on');
+    if (cshTokens.length) cshRefreshAll();
   } catch(e) {
     console.warn('Firestore CSH load failed', e);
     if (window._setSyncStatus) window._setSyncStatus('error', 'Cloud read failed');
@@ -4630,6 +4631,7 @@ defiLoad(); defiRender();
 lsStratLoad(); lsStratRender();
 cshLoad();
 cshRenderAll();
+if (cshTokens.length) cshRefreshAll();
 adLoadSaved();
 adRenderSaved();
 
