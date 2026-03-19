@@ -927,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.8z3kw</div>
+    <div class="sidebar-footer">v.n1q7d</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -3294,7 +3294,8 @@ function cshRenderSummary() {
       const delta = actual1MGain - btcEquivGain;
       el1mDelta.textContent = (delta >= 0 ? '+' : '') + cshFmt(delta);
       el1mDelta.className = 'csh-sum-val ' + (delta >= 0 ? 'pos' : 'neg');
-      el1mSub.textContent = 'Portfolio ' + (actual1MGain >= 0 ? '+' : '') + cshFmt(actual1MGain) + ' · BTC ' + (btcEquivGain >= 0 ? '+' : '') + cshFmt(btcEquivGain);
+      const portfolioPct = (actual1MGain / portfolio30dVal) * 100;
+      el1mSub.textContent = (portfolioPct >= 0 ? '+' : '') + portfolioPct.toFixed(2) + '% · BTC ' + (cshBtc1MChange >= 0 ? '+' : '') + cshBtc1MChange.toFixed(2) + '%';
     }
   }
 }
