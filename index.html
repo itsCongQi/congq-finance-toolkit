@@ -926,7 +926,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.m2w7n</div>
+    <div class="sidebar-footer">v.j5f8q</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -2983,6 +2983,55 @@ async function cshFetchPrice(symbol) {
   return { price: null, live: false };
 }
 
+/* ── 1-Month historical price (for vs-BTC comparison) ── */
+let cshBtc1MChange = null; // cached so we only fetch BTC once per refresh
+
+async function cshFetch30dAgoPrice(symbol) {
+  symbol = symbol.toUpperCase();
+  // Binance klines — 31 daily candles, oldest close ≈ 30d ago
+  for (const pair of [symbol + 'USDT', symbol + 'USDC']) {
+    try {
+      const res = await fetch('https://api.binance.com/api/v3/klines?symbol=' + pair + '&interval=1d&limit=31');
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length < 2) continue;
+      const p = parseFloat(data[0][4]); // close of oldest candle
+      if (isFinite(p) && p > 0) return p;
+    } catch(e) {}
+  }
+  // CoinGecko fallback
+  const id = KNOWN_CG_IDS[symbol] || gcIdCache[symbol];
+  if (id) {
+    try {
+      const res = await fetch('https://api.coingecko.com/api/v3/coins/' + id + '/market_chart?vs_currency=usd&days=30&interval=daily');
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.prices?.length) return data.prices[0][1];
+    } catch(e) {}
+  }
+  return null;
+}
+
+async function cshApply1MvsBtc(tokList) {
+  // Fetch BTC baseline (reuse cached if already fetched this session)
+  const btcTok = cshTokens.find(t => t.symbol === 'BTC');
+  const btcNow = btcTok ? cshGetPrice(btcTok) : (await cshFetchPrice('BTC')).price;
+  const btc30d = await cshFetch30dAgoPrice('BTC');
+  cshBtc1MChange = (btc30d && btcNow) ? (btcNow / btc30d - 1) * 100 : null;
+
+  for (const tok of tokList) {
+    if (tok.priceMode === 'manual') { tok.change1M = null; tok.change1MvsBtc = null; continue; }
+    const p30d = tok.symbol === 'BTC' ? btc30d : await cshFetch30dAgoPrice(tok.symbol);
+    const nowP = cshGetPrice(tok);
+    if (p30d && nowP > 0) {
+      tok.change1M = (nowP / p30d - 1) * 100;
+      tok.change1MvsBtc = cshBtc1MChange !== null ? tok.change1M - cshBtc1MChange : null;
+    } else {
+      tok.change1M = null; tok.change1MvsBtc = null;
+    }
+  }
+}
+
 async function cshRefreshAll() {
   const btn = document.getElementById('csh-refresh-btn');
   btn.disabled = true; btn.textContent = 'Refreshing…';
@@ -2993,6 +3042,8 @@ async function cshRefreshAll() {
       else { tok.priceStatus = tok.livePrice ? 'live' : 'err'; }
     } else { tok.priceStatus = 'manual'; }
   }
+  btn.textContent = 'Fetching 1M…';
+  await cshApply1MvsBtc(cshTokens);
   cshSave();
   cshRenderAll();
   btn.disabled = false;
@@ -3060,6 +3111,7 @@ async function cshAddToken() {
   const result = await cshFetchPrice(symbol);
   if (result.live) { tok.livePrice = result.price; tok.change24h = result.change24h ?? null; tok.priceStatus = 'live'; showToast(symbol + ' price loaded'); }
   else { tok.priceStatus = 'err'; showToast(symbol + ' — enter price manually', false); }
+  await cshApply1MvsBtc([tok]);
   cshSave();
   cshRenderAll();
 }
@@ -3273,6 +3325,10 @@ function cshRenderTokenCard(tok, existing) {
           <div class="csh-hstat-val" style="color:${changeColor}">${change24h>=0?'+':''}${cshFmt(price * pnl.holdingQty * change24h / 100)}</div>
           <div class="csh-hstat-label">24h Change</div>
         </div>` : ''}
+        ${tok.change1MvsBtc != null ? `<div class="csh-hstat">
+          <div class="csh-hstat-val" style="color:${tok.change1MvsBtc>=0?'var(--green)':'var(--red)'}">${tok.change1MvsBtc>=0?'+':''}${tok.change1MvsBtc.toFixed(1)}%</div>
+          <div class="csh-hstat-label">1M vs BTC</div>
+        </div>` : ''}
         <div class="csh-hstat">
           <div class="csh-hstat-val" style="color:${pnlColor}">${pnlSign}${cshFmt(pnl.unrealizedPnl)}</div>
           <div class="csh-hstat-label">Unrealized</div>
@@ -3293,7 +3349,7 @@ function cshRenderTokenCard(tok, existing) {
     </div>
     <div class="csh-token-body">
       <!-- Stats row -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px">
         <div class="kpi glass" style="padding:14px 16px">
           <div class="kpi-label">Holdings</div>
           <div class="kpi-val" style="font-size:16px">${cshFmtQ(pnl.holdingQty)} ${tok.symbol}</div>
@@ -3314,6 +3370,11 @@ function cshRenderTokenCard(tok, existing) {
           <div class="kpi-val ${pnl.realizedPnl>=0?'kv-g':'kv-r'}" style="font-size:16px">${pnl.realizedPnl>=0?'+':''}${cshFmt(pnl.realizedPnl)}</div>
           <div class="kpi-note">FIFO basis</div>
         </div>
+        ${tok.change1MvsBtc != null ? `<div class="kpi glass" style="padding:14px 16px">
+          <div class="kpi-label">1M % vs BTC</div>
+          <div class="kpi-val ${tok.change1MvsBtc>=0?'kv-g':'kv-r'}" style="font-size:16px">${tok.change1MvsBtc>=0?'+':''}${tok.change1MvsBtc.toFixed(2)}%</div>
+          <div class="kpi-note">Asset ${tok.change1M!=null?(tok.change1M>=0?'+':'')+tok.change1M.toFixed(2)+'%':'—'} · BTC ${cshBtc1MChange!=null?(cshBtc1MChange>=0?'+':'')+cshBtc1MChange.toFixed(2)+'%':'—'}</div>
+        </div>` : ''}
       </div>
       <!-- Trades -->
       <div class="csh-trades-header">
