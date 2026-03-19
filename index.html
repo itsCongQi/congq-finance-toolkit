@@ -578,10 +578,11 @@ body::after {
 .csh-token-card.expanded .csh-token-body { display:block; }
 
 /* PnL mini stats in header */
-.csh-header-stats { display:flex; gap:20px; align-items:center; }
-.csh-hstat { text-align:right; }
-.csh-hstat-val { font-size:13px; font-weight:700; letter-spacing:-0.02em; }
-.csh-hstat-label { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text4); }
+.csh-header-stats { display:flex; gap:0; align-items:center; }
+.csh-hstat { text-align:right; min-width:80px; padding:0 10px; }
+.csh-hstat-val { font-size:13px; font-weight:700; letter-spacing:-0.02em; white-space:nowrap; }
+.csh-hstat-label { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text4); white-space:nowrap; }
+.csh-token-price-wrap { min-width:190px; }
 
 /* Trades section */
 .csh-trades-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
@@ -926,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.p3n6r</div>
+    <div class="sidebar-footer">v.8z3kw</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -1518,6 +1519,12 @@ body::after {
         <div class="csh-sum-item"><div class="csh-sum-label">Realized PnL</div><div class="csh-sum-val" id="csh-sum-rpnl">$0</div></div>
         <div class="csh-sum-divider"></div>
         <div class="csh-sum-item"><div class="csh-sum-label">Total PnL</div><div class="csh-sum-val" id="csh-sum-total">$0</div></div>
+        <div class="csh-sum-divider" id="csh-sum-1m-div" style="display:none"></div>
+        <div class="csh-sum-item" id="csh-sum-1m-wrap" style="display:none">
+          <div class="csh-sum-label">1M vs All-in-BTC</div>
+          <div class="csh-sum-val" id="csh-sum-1m-delta">—</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;white-space:nowrap" id="csh-sum-1m-sub"></div>
+        </div>
       </div>
 
       <!-- Token cards -->
@@ -3025,10 +3032,11 @@ async function cshApply1MvsBtc(tokList) {
     const p30d = tok.symbol === 'BTC' ? btc30d : await cshFetch30dAgoPrice(tok.symbol);
     const nowP = cshGetPrice(tok);
     if (p30d && nowP > 0) {
+      tok.price30d = p30d;
       tok.change1M = (nowP / p30d - 1) * 100;
       tok.change1MvsBtc = cshBtc1MChange !== null ? tok.change1M - cshBtc1MChange : null;
     } else {
-      tok.change1M = null; tok.change1MvsBtc = null;
+      tok.price30d = null; tok.change1M = null; tok.change1MvsBtc = null;
     }
   }
 }
@@ -3260,6 +3268,35 @@ function cshRenderSummary() {
   uEl.textContent = cshPnlSign(totalU); uEl.className='csh-sum-val '+cshPnlClass(totalU);
   rEl.textContent = cshPnlSign(totalR); rEl.className='csh-sum-val '+cshPnlClass(totalR);
   tEl.textContent = cshPnlSign(total); tEl.className='csh-sum-val '+cshPnlClass(total);
+
+  // 1M portfolio actual gain vs what all-in BTC would have returned
+  let portfolio30dVal = 0, actual1MGain = 0, tokens1MCount = 0;
+  cshTokens.forEach(tok => {
+    if (tok.price30d && tok.priceMode !== 'manual') {
+      const p = cshCalcPnL(tok);
+      if (p.holdingQty > 0) {
+        portfolio30dVal += p.holdingQty * tok.price30d;
+        actual1MGain += p.holdingQty * (cshGetPrice(tok) - tok.price30d);
+        tokens1MCount++;
+      }
+    }
+  });
+  const el1mWrap = document.getElementById('csh-sum-1m-wrap');
+  const el1mDiv  = document.getElementById('csh-sum-1m-div');
+  const el1mDelta = document.getElementById('csh-sum-1m-delta');
+  const el1mSub  = document.getElementById('csh-sum-1m-sub');
+  const has1M = tokens1MCount > 0 && cshBtc1MChange !== null && portfolio30dVal > 0;
+  if (el1mWrap) {
+    el1mWrap.style.display = has1M ? '' : 'none';
+    if (el1mDiv) el1mDiv.style.display = has1M ? '' : 'none';
+    if (has1M) {
+      const btcEquivGain = portfolio30dVal * (cshBtc1MChange / 100);
+      const delta = actual1MGain - btcEquivGain;
+      el1mDelta.textContent = (delta >= 0 ? '+' : '') + cshFmt(delta);
+      el1mDelta.className = 'csh-sum-val ' + (delta >= 0 ? 'pos' : 'neg');
+      el1mSub.textContent = 'Portfolio ' + (actual1MGain >= 0 ? '+' : '') + cshFmt(actual1MGain) + ' · BTC ' + (btcEquivGain >= 0 ? '+' : '') + cshFmt(btcEquivGain);
+    }
+  }
 }
 
 function cshRenderTokenCard(tok, existing) {
