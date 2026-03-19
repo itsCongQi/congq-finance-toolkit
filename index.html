@@ -873,6 +873,15 @@ body::after {
         Loan Simulation
       </button>
 
+      <button class="nav-btn" id="nav-defiloop" onclick="navigate('defiloop')">
+        <span class="nav-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
+          </svg>
+        </span>
+        DeFi Loop
+      </button>
+
       <div class="nav-section-label" style="margin-top:8px">Tracking</div>
 
       <button class="nav-btn" id="nav-defi" onclick="navigate('defi')">
@@ -917,7 +926,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.t2r6m</div>
+    <div class="sidebar-footer">v.9kx4p</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -1403,6 +1412,67 @@ body::after {
 
     </div>
     </div><!-- /page-strategy -->
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         PAGE: DEFI LOOP CALCULATOR
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="page" id="page-defiloop">
+    <div class="page-inner" style="max-width:860px">
+
+      <div class="airdrop-hero">
+        <h2 class="airdrop-title">DeFi <em>Loop</em> Calculator</h2>
+        <p class="airdrop-desc">Model recursive lending strategies — deposit collateral, borrow, re-deposit — and see the net APY and effective leverage across any number of loops.</p>
+      </div>
+
+      <!-- ── INPUTS ── -->
+      <div class="ac-section glass" style="margin-bottom:10px">
+        <div class="ac-head"><div class="ac-num">1</div><span class="ac-title">Strategy Parameters</span></div>
+        <div class="sr-body">
+          <div class="field">
+            <label>Initial Capital</label>
+            <div class="input-wrap"><span class="ad l">$</span><input class="pl" type="number" id="dl-capital" placeholder="10000" step="100" oninput="dlCalc()"></div>
+          </div>
+          <div class="field">
+            <label>Base Asset Yield</label>
+            <div class="input-wrap"><input class="pr" type="number" id="dl-yield" placeholder="8.5" step="0.1" oninput="dlCalc()"><span class="ad r">%</span></div>
+          </div>
+          <div class="field">
+            <label>Borrow Rate</label>
+            <div class="input-wrap"><input class="pr" type="number" id="dl-borrow" placeholder="3.2" step="0.1" oninput="dlCalc()"><span class="ad r">%</span></div>
+          </div>
+          <div class="field">
+            <label>Collateral Ratio <span class="hint">(LTV)</span></label>
+            <div class="input-wrap"><input class="pr" type="number" id="dl-ltv" placeholder="75" step="1" min="1" max="99" oninput="dlCalc()"><span class="ad r">%</span></div>
+          </div>
+          <div class="field">
+            <label>Number of Loops</label>
+            <div class="input-wrap"><input class="pr" type="number" id="dl-loops" placeholder="3" step="1" min="1" max="20" oninput="dlCalc()"><span class="ad r">×</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── RESULTS ── -->
+      <div class="ac-results" id="dl-results" style="margin-top:20px">
+        <div class="ac-results-header">
+          <span class="ac-results-title">Loop Results</span>
+          <span class="ac-results-meta" id="dl-results-meta"></span>
+        </div>
+        <div class="kpi-strip" id="dl-kpi-strip"></div>
+        <div class="ac-breakdown glass" style="margin-bottom:10px">
+          <div class="bd-head">Per-Loop Breakdown</div>
+          <div id="dl-loop-rows"></div>
+        </div>
+        <div class="ac-breakdown glass">
+          <div class="bd-head">Calculation Summary</div>
+          <div id="dl-brows"></div>
+        </div>
+        <div class="ac-disclaimer" style="margin-top:10px">
+          <strong>Estimates only.</strong> This model assumes constant rates, perfect liquidity, and no price movement. Recursive borrowing amplifies liquidation risk significantly — a small price drop can trigger cascading liquidations. Not financial advice.
+        </div>
+      </div>
+
+    </div>
+    </div><!-- /page-defiloop -->
 
     <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          PAGE: CRYPTO SPOT HOLDINGS
@@ -2464,6 +2534,101 @@ function calculateStrategy() {
 
   results.classList.add('show');
   setTimeout(() => results.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+}
+
+/* ═══════════════════════════════
+   DEFI LOOP CALCULATOR
+═══════════════════════════════ */
+function dlCalc() {
+  const capital  = parseFloat(document.getElementById('dl-capital').value);
+  const yieldPct = parseFloat(document.getElementById('dl-yield').value);
+  const borrowPct= parseFloat(document.getElementById('dl-borrow').value);
+  const ltvPct   = parseFloat(document.getElementById('dl-ltv').value);
+  const loops    = parseInt(document.getElementById('dl-loops').value, 10);
+
+  const results = document.getElementById('dl-results');
+
+  if (!capital || capital <= 0 || isNaN(yieldPct) || isNaN(borrowPct) || isNaN(ltvPct) || isNaN(loops)
+      || ltvPct <= 0 || ltvPct >= 100 || loops < 1) {
+    results.classList.remove('show');
+    return;
+  }
+
+  const ltv = ltvPct / 100;
+  const Y   = yieldPct / 100;
+  const B   = borrowPct / 100;
+
+  // Build per-loop data
+  const loopData = [];
+  let deposited = capital;
+  for (let i = 0; i <= loops; i++) {
+    const borrowed = i < loops ? deposited * ltv : 0;
+    const yieldEarned = deposited * Y;
+    const borrowCost  = borrowed * B;
+    loopData.push({ loop: i, deposited, borrowed, yieldEarned, borrowCost });
+    deposited = borrowed;
+  }
+
+  const totalDeposited   = loopData.reduce((s, r) => s + r.deposited, 0);
+  const totalBorrowed    = loopData.reduce((s, r) => s + r.borrowed, 0);
+  const totalYield       = loopData.reduce((s, r) => s + r.yieldEarned, 0);
+  const totalBorrowCost  = loopData.reduce((s, r) => s + r.borrowCost, 0);
+  const netProfit        = totalYield - totalBorrowCost;
+  const netAPY           = (netProfit / capital) * 100;
+  const leverage         = totalDeposited / capital;
+  const spreadPct        = yieldPct - borrowPct;
+
+  function fmt$(n)  { return '$' + n.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+  function fmtPct(n){ return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'; }
+  function kpi(label, val, cls, note) {
+    return '<div class="kpi glass"><div class="kpi-label">' + label + '</div>' +
+      '<div class="kpi-val ' + (cls||'') + '">' + val + '</div>' +
+      (note ? '<div class="kpi-note">' + note + '</div>' : '') + '</div>';
+  }
+  function brow(k, v, cls) { return '<div class="brow' + (cls?' '+cls:'') + '"><span class="bk">' + k + '</span><span class="bv">' + v + '</span></div>'; }
+
+  const netAPYClass = netAPY >= 0 ? 'kv-g' : 'kv-r';
+  document.getElementById('dl-kpi-strip').innerHTML =
+    '<div class="kpi kpi-hero"><div class="kpi-label">Net APY</div><div class="kpi-val ' + netAPYClass + '">' + fmtPct(netAPY) + '</div><div class="kpi-note">On initial capital</div></div>' +
+    kpi('Net Annual Profit', fmt$(netProfit), netProfit >= 0 ? 'kv-g' : 'kv-r', 'Yield minus borrow costs') +
+    kpi('Effective Leverage', leverage.toFixed(2) + '×', 'kv-b', 'Total deployed / initial') +
+    kpi('Total Deployed', fmt$(totalDeposited), '', loops + ' loop' + (loops !== 1 ? 's' : '')) +
+    kpi('Total Yield', fmt$(totalYield), 'kv-g', 'Gross before borrow') +
+    kpi('Total Borrow Cost', fmt$(totalBorrowCost), 'kv-r', 'Annual interest paid');
+
+  document.getElementById('dl-results-meta').textContent =
+    yieldPct + '% yield · ' + borrowPct + '% borrow · ' + ltvPct + '% LTV · ' + loops + ' loop' + (loops !== 1 ? 's' : '');
+
+  // Per-loop table
+  let loopHtml = '<div class="brow brow-head"><span class="bk">Loop</span><span class="bv" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 8px;text-align:right;font-weight:700;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.03em">Deposited&nbsp;&nbsp;Borrowed&nbsp;&nbsp;Yield&nbsp;&nbsp;Borrow&nbsp;Cost</span></div>';
+  loopData.forEach(r => {
+    loopHtml += '<div class="brow"><span class="bk" style="font-size:12px">Loop ' + r.loop + (r.loop === 0 ? ' <span style="color:var(--text3);font-weight:400">(initial)</span>' : '') + '</span>' +
+      '<span class="bv" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 8px;text-align:right;font-size:12px">' +
+      '<span>' + fmt$(r.deposited) + '</span>' +
+      '<span style="color:var(--text3)">' + (r.borrowed > 0 ? fmt$(r.borrowed) : '—') + '</span>' +
+      '<span style="color:var(--green)">' + fmt$(r.yieldEarned) + '</span>' +
+      '<span style="color:var(--red)">' + (r.borrowCost > 0 ? fmt$(r.borrowCost) : '—') + '</span>' +
+      '</span></div>';
+  });
+  document.getElementById('dl-loop-rows').innerHTML = loopHtml;
+
+  document.getElementById('dl-brows').innerHTML = [
+    brow('Initial capital', fmt$(capital)),
+    brow('Collateral ratio (LTV)', ltvPct + '%'),
+    brow('Base asset yield', yieldPct + '%'),
+    brow('Borrow rate', borrowPct + '%'),
+    brow('Rate spread', fmtPct(spreadPct)),
+    brow('Number of loops', loops + '×'),
+    brow('Total capital deployed', fmt$(totalDeposited)),
+    brow('Total borrowed', fmt$(totalBorrowed)),
+    brow('Effective leverage', leverage.toFixed(4) + '×'),
+    brow('Gross annual yield', fmt$(totalYield)),
+    brow('Total annual borrow cost', '−' + fmt$(totalBorrowCost)),
+    brow('Net annual profit', fmt$(netProfit), 'tot'),
+    brow('Net APY on initial capital', fmtPct(netAPY), 'tot'),
+  ].join('');
+
+  results.classList.add('show');
 }
 
 // Default start date to today minus 90 days for convenience
