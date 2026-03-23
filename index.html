@@ -900,7 +900,7 @@ body::after {
             <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
           </svg>
         </span>
-        Loaned Capital
+        Loan
       </button>
 
       <button class="nav-btn" id="nav-crypto" onclick="navigate('crypto')">
@@ -927,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.k7m3q</div>
+    <div class="sidebar-footer">v.r4t8w</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -1540,7 +1540,7 @@ body::after {
     <div class="page-inner" style="display:flex;flex-direction:column;gap:16px">
 
       <div class="airdrop-hero">
-        <h2 class="airdrop-title">Loaned Capital <em>Tracker</em></h2>
+        <h2 class="airdrop-title">Loan <em>Tracker</em></h2>
         <p class="airdrop-desc">Track all borrowed capital and their costs. Add multiple loans to see combined monthly obligations, total interest cost, and net cashflow against your deployed yield strategies.</p>
       </div>
 
@@ -4352,13 +4352,13 @@ function defiToggleLoanLink(id) {
     });
     lv2Log.sort((a,b)=>b.date.localeCompare(a.date));
     lv2Update(); lv2Save();
-    showToast('Linked to Loaned Capital ✓');
+    showToast('Linked to Loan ✓');
   } else {
     s.linkedToMortgage = false;
     lv2Strategies = lv2Strategies.filter(x=>x.id!==id);
     lv2Log = lv2Log.filter(t=>t._defiStratId!==id);
     lv2Update(); lv2Save();
-    showToast('Unlinked from Loaned Capital');
+    showToast('Unlinked from Loan');
   }
   defiSave(); defiRender();
 }
@@ -4382,7 +4382,7 @@ function defiAddClaim(stratId) {
   if (gasEl) gasEl.value = '';
   if (noteEl) noteEl.value = '';
 
-  // ── Sync to Loaned Capital ledger if linked ──
+  // ── Sync to Loan ledger if linked ──
   if (s.linkedToMortgage) {
     lv2Log.push({ id:claimId, date, type:'income-yield', amount, desc:s.name+' reward claim', _defiLinked:true, _defiStratId:stratId });
     if (gas > 0) lv2Log.push({ id:claimId+1, date, type:'payment-fee', amount:gas, desc:s.name+' gas fee', _defiLinked:true, _defiStratId:stratId });
@@ -4391,7 +4391,7 @@ function defiAddClaim(stratId) {
   }
 
   defiSave(); defiRender();
-  showToast(s.linkedToMortgage ? 'Claim logged + synced to Loaned Capital ✓' : 'Claim logged');
+  showToast(s.linkedToMortgage ? 'Claim logged + synced to Loan ✓' : 'Claim logged');
 }
 function defiRemoveClaim(stratId, claimId) {
   const s = defiStrategies.find(s=>s.id===stratId); if (!s) return;
@@ -4558,7 +4558,7 @@ function defiRender() {
       <div class="defi-card-header" onclick="defiToggleCard(${s.id})">
         <div class="defi-card-accent" style="background:${color}"></div>
         <div class="defi-card-title">
-          <div class="defi-card-name">${s.name}${s.linkedToMortgage?` <span style="font-size:9px;font-weight:700;background:rgba(0,122,255,0.1);color:var(--blue);padding:1px 6px;border-radius:99px;border:1px solid rgba(0,122,255,0.2);vertical-align:middle">⇄ Loaned Capital</span>`:''}</div>
+          <div class="defi-card-name">${s.name}${s.linkedToMortgage?` <span style="font-size:9px;font-weight:700;background:rgba(0,122,255,0.1);color:var(--blue);padding:1px 6px;border-radius:99px;border:1px solid rgba(0,122,255,0.2);vertical-align:middle">⇄ Loan</span>`:''}</div>
           <div class="defi-card-meta">
             <span class="defi-proto-tag" style="background:${color}18;color:${color};border-color:${color}33">${defiTypeLabel[s.type]||s.type}</span>
             &nbsp;${statusDot} · ${days}d${maturityBadge}
@@ -4661,7 +4661,7 @@ function defiRender() {
             <div class="defi-claims-title">Reward Claims (${s.claims.length})</div>
             <div style="display:flex;gap:8px">
               <button class="btn-icon-sm" style="font-size:11px;padding:3px 10px;color:${s.active?'var(--text3)':'var(--green)'};border-color:${s.active?'var(--border-med)':'rgba(52,199,89,0.3)'}" onclick="defiToggleActive(${s.id})">${s.active?'Mark Closed':'Mark Active'}</button>
-              <button class="btn-icon-sm" style="font-size:11px;padding:3px 10px;color:${s.linkedToMortgage?'var(--blue)':'var(--text3)'};border-color:${s.linkedToMortgage?'rgba(0,122,255,0.3)':'var(--border-med)'};background:${s.linkedToMortgage?'rgba(0,122,255,0.06)':'transparent'}" onclick="defiToggleLoanLink(${s.id})" title="Toggle sync with Loaned Capital tracker">${s.linkedToMortgage?'⇄ Loan Linked':'Link to Loan Capital'}</button>
+              <button class="btn-icon-sm" style="font-size:11px;padding:3px 10px;color:${s.linkedToMortgage?'var(--blue)':'var(--text3)'};border-color:${s.linkedToMortgage?'rgba(0,122,255,0.3)':'var(--border-med)'};background:${s.linkedToMortgage?'rgba(0,122,255,0.06)':'transparent'}" onclick="defiToggleLoanLink(${s.id})" title="Toggle sync with Loan tracker">${s.linkedToMortgage?'⇄ Loan Linked':'Link to Loan'}</button>
               <button class="btn-icon-sm del" onclick="defiRemoveStrategy(${s.id})" style="font-size:11px;padding:3px 10px">Remove Strategy</button>
             </div>
           </div>
