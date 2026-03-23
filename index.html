@@ -927,7 +927,7 @@ body::after {
       <div class="sidebar-sync-dot"></div>
       <span id="sidebar-sync-label">Connecting…</span>
     </div>
-    <div class="sidebar-footer">v.f6n2p</div>
+    <div class="sidebar-footer">v.k7m3q</div>
   </nav>
 
   <!-- ══════ MAIN CONTENT ══════ -->
@@ -4223,15 +4223,16 @@ const defiTypeColor = { stablecoin:'var(--green)', lending:'var(--teal)', lp:'va
 const defiProtoColor = { aave:'#b6509e', pendle:'#3d7cff', curve:'#f5a623', convex:'var(--red)', compound:'#00d395', uniswap:'#ff007a', gmx:'#3de3aa', eigenlayer:'#6240ff', ethena:'#1a1a1a', hyperliquid:'#00ff87', other:'var(--blue)' };
 function defiFmt(n) { return (n<0?'−$':'$')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function defiFmtS(n) { const a=Math.abs(n),s=n<0?'−$':'$'; if(a>=1e6)return s+(a/1e6).toFixed(2)+'M'; if(a>=1e3)return s+(a/1e3).toFixed(1)+'K'; return s+a.toFixed(2); }
-function defiDays(dateStr) { if(!dateStr) return 0; const [y,m,d]=dateStr.split('-').map(Number); return Math.max(0,Math.floor((new Date()-new Date(y,m-1,d))/86400000)); }
+function defiParseDate(str) { const [y,m,d]=str.split('-').map(Number); return new Date(y,m-1,d); }
+function defiDays(dateStr, endStr) { if(!dateStr) return 0; return Math.max(0,Math.floor(((endStr?defiParseDate(endStr):new Date())-defiParseDate(dateStr))/86400000)); }
 
 // Returns time-weighted average capital over the strategy's life
-function defiTimeWeightedCapital(s) {
+function defiTimeWeightedCapital(s, endStr) {
   const hist = s.capitalHistory?.length
     ? [...s.capitalHistory].sort((a,b)=>a.date.localeCompare(b.date))
     : [{date:s.date, amount:s.amount, type:'deploy'}];
-  const today = new Date(); today.setHours(0,0,0,0);
-  const parseD = str => { const [y,m,d]=str.split('-').map(Number); return new Date(y,m-1,d); };
+  const today = endStr ? defiParseDate(endStr) : new Date(); today.setHours(0,0,0,0);
+  const parseD = str => defiParseDate(str);
   let totalDays = 0, weightedSum = 0, running = 0;
   for (let i=0; i<hist.length; i++) {
     const e = hist[i];
@@ -4253,10 +4254,10 @@ function defiEffectiveAmount(s) {
 }
 
 // Expected income to date: sum over each tranche window [entryDate → nextEntryDate|today]
-function defiExpectedIncomeToDate(s) {
+function defiExpectedIncomeToDate(s, endStr) {
   const hist = s.capitalHistory?.length ? [...s.capitalHistory].sort((a,b)=>a.date.localeCompare(b.date)) : [{date:s.date,amount:s.amount,type:'deploy'}];
-  const today = new Date(); today.setHours(0,0,0,0);
-  const parseD = str => { const [y,m,d]=str.split('-').map(Number); return new Date(y,m-1,d); };
+  const today = endStr ? defiParseDate(endStr) : new Date(); today.setHours(0,0,0,0);
+  const parseD = str => defiParseDate(str);
   let total = 0, running = 0;
   for (let i=0; i<hist.length; i++) {
     const e = hist[i];
@@ -4331,6 +4332,8 @@ function defiRemoveStrategy(id) {
 function defiToggleActive(id) {
   const s = defiStrategies.find(s=>s.id===id); if (!s) return;
   s.active = !s.active;
+  if (!s.active) { s.closedAt = new Date().toISOString().slice(0,10); }
+  else { s.closedAt = null; }
   defiSave(); defiRender();
   if (s.linkedToMortgage) lv2Update();
 }
@@ -4471,9 +4474,10 @@ function defiRender() {
     let realisedAPYNum = 0, realisedAPYDen = 0;
     defiStrategies.forEach(s => {
       const sNet = s.claims.reduce((a,c)=>a+c.amount-c.gas, 0);
-      const sDays = defiDays(s.date);
+      const sEnd = s.active ? undefined : s.closedAt;
+      const sDays = defiDays(s.date, sEnd);
       if (s.amount > 0 && sDays > 0 && s.claims.length > 0) {
-        const twac = defiTimeWeightedCapital(s);
+        const twac = defiTimeWeightedCapital(s, sEnd);
         const sAPY = twac > 0 ? (sNet / twac) * (365 / sDays) * 100 : 0;
         realisedAPYNum += sAPY * twac;
         realisedAPYDen += twac;
@@ -4507,10 +4511,11 @@ function defiRender() {
     const totalClaimed = s.claims.reduce((a,c)=>a+c.amount,0);
     const totalGas = s.claims.reduce((a,c)=>a+c.gas,0);
     const netIncome = totalClaimed - totalGas;
-    const days = defiDays(s.date);
-    const expectedIncome = defiExpectedIncomeToDate(s);
+    const endStr = s.active ? undefined : s.closedAt;
+    const days = defiDays(s.date, endStr);
+    const expectedIncome = defiExpectedIncomeToDate(s, endStr);
     const effectiveAmount = defiEffectiveAmount(s);
-    const twac = defiTimeWeightedCapital(s);
+    const twac = defiTimeWeightedCapital(s, endStr);
     const realisedAPY = (twac>0&&days>0) ? (netIncome/twac)*(365/days)*100 : 0;
     const vsExpected = netIncome - expectedIncome;
     const isOpen = defiExpanded.has(s.id);
